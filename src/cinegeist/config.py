@@ -26,6 +26,10 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr
 APP_NAME = "cinegeist"
 DEFAULT_API_BASE = "https://openrouter.ai/api/v1"
 API_KEY_ENV = "OPENROUTER_API_KEY"
+# TMDB enriches the catalog. Either a v3 API key (?api_key=) or a v4 read access token
+# (Authorization: Bearer) works; both are read from the environment only, like the LLM key.
+TMDB_API_KEY_ENV = "TMDB_API_KEY"
+TMDB_TOKEN_ENV = "TMDB_ACCESS_TOKEN"
 REDACTION = "***REDACTED***"
 
 # Config-file / env keys we accept. Anything else in the file is ignored rather than
@@ -83,19 +87,31 @@ class Settings(BaseModel):
     api_base_url: str = DEFAULT_API_BASE
     request_timeout: float = 30.0
     max_retries: int = 3
-    # Read from the environment only; hidden from repr so it never leaks into logs.
+    # All read from the environment only; hidden from repr so they never leak into logs.
     api_key: SecretStr | None = Field(default=None, repr=False)
+    tmdb_api_key: SecretStr | None = Field(default=None, repr=False)
+    tmdb_access_token: SecretStr | None = Field(default=None, repr=False)
 
     @property
     def has_api_key(self) -> bool:
-        """True when a non-empty API key is present in the environment."""
+        """True when a non-empty OpenRouter API key is present in the environment."""
         return self.api_key is not None and bool(self.api_key.get_secret_value())
 
+    @property
+    def has_tmdb_auth(self) -> bool:
+        """True when either TMDB credential (v3 key or v4 token) is present."""
+        return any(
+            secret is not None and bool(secret.get_secret_value())
+            for secret in (self.tmdb_api_key, self.tmdb_access_token)
+        )
+
+    def _secrets(self) -> list[str]:
+        values = [self.api_key, self.tmdb_api_key, self.tmdb_access_token]
+        return [s.get_secret_value() for s in values if s is not None]
+
     def redact(self, text: str) -> str:
-        """Mask this run's API key wherever it appears in ``text``."""
-        if self.api_key is not None:
-            return redact_secrets(text, self.api_key.get_secret_value())
-        return text
+        """Mask every secret this run holds wherever it appears in ``text``."""
+        return redact_secrets(text, *self._secrets())
 
 
 def _parse_dotenv(path: Path) -> dict[str, str]:
@@ -164,8 +180,11 @@ def load_settings(
     if overrides:  # a flag beats env, but only when it was actually given
         merged.update({key: value for key, value in overrides.items() if value is not None})
 
-    key = env.get(API_KEY_ENV)
-    if key:
+    if key := env.get(API_KEY_ENV):
         merged["api_key"] = SecretStr(key)
+    if tmdb_key := env.get(TMDB_API_KEY_ENV):
+        merged["tmdb_api_key"] = SecretStr(tmdb_key)
+    if tmdb_token := env.get(TMDB_TOKEN_ENV):
+        merged["tmdb_access_token"] = SecretStr(tmdb_token)
 
     return Settings(**merged)

@@ -29,10 +29,11 @@ from rich.progress import (
     TransferSpeedColumn,
 )
 
+from ..config import Settings, load_settings
 from ..config import data_dir as default_data_dir
 from . import genome
 from .db import get_state, open_catalog, set_state
-from .sources import movielens
+from .sources import movielens, tmdb
 
 # build_state keys marking each stage complete (value is an ISO timestamp).
 _INGESTED_KEY = "movielens_ingested_at"
@@ -48,10 +49,22 @@ def build_catalog(
     *,
     force: bool = False,
     url: str = movielens.DEFAULT_URL,
+    settings: Settings | None = None,
+    enrich: bool = True,
+    tmdb_scope: str = "measured",
+    tmdb_region: str = "US",
+    tmdb_limit: int | None = None,
+    tmdb_concurrency: int = 16,
     console: Console | None = None,
 ) -> None:
-    """Build the catalog into ``data_dir`` (``data/`` by default)."""
+    """Build the catalog into ``data_dir`` (``data/`` by default).
+
+    Runs download → ingest → genome, then TMDB enrichment when a credential is available.
+    Enrichment is skipped silently-but-loudly if no TMDB key is set: genome search still works,
+    it just lacks the keyword/credit/provider facets.
+    """
     console = console or Console()
+    settings = settings or load_settings()
     data_dir = data_dir or default_data_dir()
     data_dir.mkdir(parents=True, exist_ok=True)
 
@@ -60,6 +73,16 @@ def build_catalog(
         archive = _stage_download(data_dir, url, console)
         _stage_ingest(conn, archive, console, force=force)
         _stage_genome(conn, archive, data_dir, console, force=force)
+        if enrich:
+            _stage_tmdb(
+                conn,
+                settings,
+                console,
+                scope=tmdb_scope,
+                region=tmdb_region,
+                limit=tmdb_limit,
+                concurrency=tmdb_concurrency,
+            )
         console.print("[green]Catalog build complete.[/green]")
     finally:
         conn.close()
@@ -194,3 +217,31 @@ def _stage_genome(
     set_state(conn, "genome_dtype", str(genome.DTYPE.__name__))
     set_state(conn, _GENOME_KEY, _now())
     console.print(f"[green]Built genome.npy: {len(row_of):,} films × {n_tags:,} tags.[/green]")
+
+
+def _stage_tmdb(
+    conn: sqlite3.Connection,
+    settings: Settings,
+    console: Console,
+    *,
+    scope: str,
+    region: str,
+    limit: int | None,
+    concurrency: int,
+) -> None:
+    if not settings.has_tmdb_auth:
+        console.print(
+            "[yellow]No TMDB credential set; skipping enrichment.[/yellow] Genome search works "
+            "without it — set TMDB_API_KEY to add keywords, credits, countries, and providers."
+        )
+        return
+    console.print("[bold]Enriching films from TMDB[/bold] (resumable; already-fetched films skip)")
+    tmdb.enrich_catalog(
+        conn,
+        settings,
+        scope=scope,
+        region=region,
+        limit=limit,
+        concurrency=concurrency,
+        console=console,
+    )
