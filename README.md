@@ -1,5 +1,7 @@
 # cinegeist
 
+[![CI](https://github.com/arijitgupta42/cinegeist/actions/workflows/ci.yml/badge.svg)](https://github.com/arijitgupta42/cinegeist/actions/workflows/ci.yml)
+
 A conversational movie recommender for people who know what they like but can't say
 what they like.
 
