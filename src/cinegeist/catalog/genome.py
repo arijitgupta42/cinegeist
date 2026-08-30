@@ -81,3 +81,21 @@ def build_memmap(
 def load_genome(path: Path) -> np.memmap:
     """Open the genome read-only as a memmap. Values are not copied into RAM."""
     return np.load(path, mmap_mode="r")
+
+
+def cosine_scores(matrix: np.ndarray, query: np.ndarray) -> np.ndarray:
+    """Cosine similarity of every row of ``matrix`` against ``query``.
+
+    The whole point of keeping the genome as one dense matrix: this is a single matmul plus a
+    norm, milliseconds over the full catalog, no index required. Rows with zero magnitude (and
+    a zero query) score 0 rather than NaN.
+    """
+    q = np.asarray(query, dtype=DTYPE)
+    q_norm = float(np.linalg.norm(q))
+    if q_norm == 0.0:
+        return np.zeros(matrix.shape[0], dtype=DTYPE)
+    row_norms = np.linalg.norm(matrix, axis=1)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        scores = (matrix @ q) / (row_norms * q_norm)
+    scores[~np.isfinite(scores)] = 0.0
+    return scores
