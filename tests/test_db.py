@@ -50,7 +50,7 @@ def test_migrate_sets_the_user_version(tmp_path: Path) -> None:
     conn = db.connect(tmp_path / "catalog.db")
     assert db.user_version(conn) == 0
     applied = db.migrate(conn)
-    assert applied == [1]
+    assert applied == [1, 2]
     assert db.user_version(conn) == db.SCHEMA_VERSION
 
 
@@ -117,6 +117,15 @@ def test_genome_row_is_unique(tmp_path: Path) -> None:
     conn.execute("INSERT INTO movies (movie_id, title, genome_row) VALUES (1, 'A (1)', 5)")
     with pytest.raises(sqlite3.IntegrityError):
         conn.execute("INSERT INTO movies (movie_id, title, genome_row) VALUES (2, 'B (2)', 5)")
+
+
+def test_tmdb_id_is_not_unique(tmp_path: Path) -> None:
+    # The real MovieLens links.csv points several movieIds at one tmdbId; both must ingest.
+    conn = _fresh(tmp_path)
+    conn.execute("INSERT INTO movies (movie_id, tmdb_id, title) VALUES (1, 862, 'A (1)')")
+    conn.execute("INSERT INTO movies (movie_id, tmdb_id, title) VALUES (2, 862, 'B (2)')")
+    count = conn.execute("SELECT COUNT(*) FROM movies WHERE tmdb_id = 862").fetchone()[0]
+    assert count == 2
 
 
 def test_two_null_genome_rows_are_allowed(tmp_path: Path) -> None:

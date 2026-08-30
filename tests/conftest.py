@@ -1,10 +1,11 @@
 """Shared test fixtures.
 
-The catalog tests run against a tiny synthetic ``ml-latest.zip`` — three films, three genome
+The catalog tests run against a tiny synthetic ``ml-latest.zip`` — four films, three genome
 tags, dense scores for two of them — so the whole MovieLens ingest and genome build can be
 exercised offline in milliseconds. Film 999 appears in the scores but not in ``movies.csv`` to
 prove the build drops scores for unknown films; film 3 has no scores and no year to prove
-un-vectored, year-less films survive ingest.
+un-vectored, year-less films survive ingest; film 4 shares film 1's tmdbId, mirroring the real
+dataset where several movieIds point at the same TMDB film, so ingest can't assume uniqueness.
 """
 
 from __future__ import annotations
@@ -19,9 +20,11 @@ MOVIES_CSV = (
     "1,Toy Story (1995),Adventure|Animation|Children\n"
     "2,Solaris (1972),Drama|Sci-Fi\n"
     "3,Untitled Short,Documentary\n"
+    "4,Story of Toys (1995),Animation\n"
 )
 
-LINKS_CSV = "movieId,imdbId,tmdbId\n1,0114709,862\n2,0069293,593\n3,,\n"
+# Film 4 reuses film 1's imdb/tmdb ids on purpose — real links.csv does this.
+LINKS_CSV = "movieId,imdbId,tmdbId\n1,0114709,862\n2,0069293,593\n3,,\n4,0114709,862\n"
 
 GENOME_TAGS_CSV = "tagId,tag\n1,animation\n2,cerebral\n3,space\n"
 
