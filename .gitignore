@@ -6,6 +6,9 @@
 # Built data artifacts (downloaded/generated at build time, never redistributed).
 data/
 *.db
+*.db-wal
+*.db-shm
+*.db-journal
 *.sqlite
 *.sqlite3
 *.npy

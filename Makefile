@@ -35,11 +35,11 @@ test-network:  ## integration tests that reach real APIs
 
 check: lint test  ## run before every PR
 
-catalog:
-	@echo "Catalog build arrives in session 2 (see plan.md)."
+catalog:  ## build data/cinegeist.db and data/genome.npy (downloads MovieLens; slow, resumable)
+	$(BIN)/cinegeist catalog build
 
 catalog-refresh:
-	@echo "Incremental catalog refresh arrives in session 2 (see plan.md)."
+	@echo "Incremental catalog refresh arrives later in session 2 (see plan.md)."
 
 web-shard:
 	@echo "Web shard build arrives in session 5 (see plan.md)."
