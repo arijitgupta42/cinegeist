@@ -1,0 +1,15 @@
+# Normalize line endings: store text as LF in the repo and check it out as LF,
+# so shell scripts (the git hook especially) work regardless of the OS.
+* text=auto eol=lf
+
+# Windows-only scripts keep CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary assets git should not touch.
+*.npy binary
+*.db binary
+*.png binary
+*.jpg binary
+*.ico binary

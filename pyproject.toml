@@ -1,0 +1,59 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cinegeist"
+version = "0.1.0"
+description = "A conversational movie recommender for people who can't articulate their own taste."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Arijit Gupta" }]
+keywords = ["movies", "recommender", "cli", "llm", "openrouter", "movielens", "tmdb"]
+classifiers = [
+    "Environment :: Console",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Video",
+]
+dependencies = [
+    "httpx>=0.27",
+    "pydantic>=2.6",
+    "numpy>=1.26",
+    "rich>=13.7",
+    "typer>=0.12",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.5",
+]
+
+[project.urls]
+Homepage = "https://github.com/arijitgupta42/cinegeist"
+
+[project.scripts]
+cinegeist = "cinegeist.cli:run"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cinegeist"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+# pycodestyle errors/warnings, pyflakes, import sorting, pyupgrade, bugbear.
+select = ["E", "F", "W", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Network-hitting integration tests are opt-in; unit tests never touch the network.
+addopts = "-m 'not network'"
+markers = [
+    "network: integration test that reaches a real API (excluded from CI and the default run)",
+]

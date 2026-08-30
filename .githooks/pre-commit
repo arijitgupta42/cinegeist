@@ -1,0 +1,25 @@
+#!/usr/bin/env sh
+# Refuse to commit an OpenRouter API key or a real .env file.
+#
+# The key prefix is assembled from pieces at runtime so that this hook does not
+# match its own source when it scans the staged diff. Install with:
+#   git config core.hooksPath .githooks   (done by `make setup`)
+
+set -eu
+
+# Reconstruct the key prefix ("s" + "k-or-") without writing it literally here.
+prefix="s$(printf '%s' 'k-or-')"
+
+if git diff --cached --no-color -U0 | grep -Eq "${prefix}[A-Za-z0-9_-]{6,}"; then
+	echo "pre-commit: staged changes look like they contain an OpenRouter API key." >&2
+	echo "pre-commit: the value was NOT printed. Remove it and commit again." >&2
+	exit 1
+fi
+
+# Block committing a real environment file (but allow the .env.example template).
+if git diff --cached --name-only | grep -E '(^|/)\.env(\.[^/]*)?$' | grep -qv '\.env\.example$'; then
+	echo "pre-commit: refusing to commit a .env file (secrets belong in the environment)." >&2
+	exit 1
+fi
+
+exit 0

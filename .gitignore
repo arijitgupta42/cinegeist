@@ -1,0 +1,40 @@
+# Secrets — never commit an API key or an environment file.
+.env
+.env.*
+!.env.example
+
+# Built data artifacts (downloaded/generated at build time, never redistributed).
+data/
+*.db
+*.sqlite
+*.sqlite3
+*.npy
+
+# Local config and caches (the model cache lives under ~/.cache/cinegeist/).
+.cache/
+
+# Python.
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Web demo (later sessions).
+node_modules/
+web/dist/
+web/public/shard/*.bin
+
+# Editor / OS noise.
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
