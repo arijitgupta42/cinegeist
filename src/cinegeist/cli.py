@@ -18,7 +18,7 @@ from rich.console import Console
 from rich.table import Table
 
 from . import __version__
-from .config import API_KEY_ENV, cache_dir, config_path, load_settings
+from .config import API_KEY_ENV, cache_dir, config_path, data_dir, load_settings
 from .llm.client import LLMError, OpenRouterClient
 from .llm.registry import free_models
 
@@ -124,6 +124,12 @@ def catalog_build(
         "--force",
         help="Rebuild the ingest and genome stages from the downloaded archive.",
     ),
+    region: str = typer.Option(
+        "US", "--region", help="Region for TMDB watch-provider availability."
+    ),
+    skip_enrich: bool = typer.Option(
+        False, "--skip-enrich", help="Skip the TMDB enrichment stage (genome only)."
+    ),
     data: str | None = typer.Option(
         None,
         "--data-dir",
@@ -133,16 +139,73 @@ def catalog_build(
     """Download MovieLens and build data/cinegeist.db and data/genome.npy.
 
     Resumable: a partial download continues, and finished stages are skipped. The first run
-    fetches a few hundred MB and processes the tag genome, so it takes a while.
+    fetches a few hundred MB and processes the tag genome, so it takes a while. TMDB
+    enrichment runs last when a TMDB credential is set (see `cinegeist config`).
     """
     # Imported lazily so the light commands (models, config) don't pay numpy's import cost.
     from .catalog.build import build_catalog
 
     try:
-        build_catalog(data_dir=Path(data) if data else None, force=force, console=console)
+        build_catalog(
+            data_dir=Path(data) if data else None,
+            force=force,
+            enrich=not skip_enrich,
+            tmdb_region=region,
+            console=console,
+        )
     except (OSError, ValueError) as error:
         err_console.print(f"[red]Catalog build failed:[/red] {error}")
         raise typer.Exit(1) from error
+
+
+@catalog_app.command("enrich")
+def catalog_enrich(
+    scope: str = typer.Option(
+        "measured",
+        "--scope",
+        help="Which films to enrich: 'measured' (genome-covered) or 'all'.",
+    ),
+    region: str = typer.Option(
+        "US", "--region", help="Region for TMDB watch-provider availability."
+    ),
+    limit: int | None = typer.Option(
+        None, "--limit", help="Enrich at most this many films (for a partial run)."
+    ),
+    concurrency: int = typer.Option(
+        16, "--concurrency", help="Number of concurrent TMDB requests."
+    ),
+    force: bool = typer.Option(
+        False, "--force", help="Re-fetch films even if they already have TMDB data."
+    ),
+    data: str | None = typer.Option(
+        None, "--data-dir", help="Catalog location (defaults to ./data)."
+    ),
+) -> None:
+    """Fetch keywords, credits, countries, and providers from TMDB. Resumable and concurrent."""
+    from .catalog.db import open_catalog
+    from .catalog.sources import tmdb
+
+    settings = load_settings()
+    conn = open_catalog(Path(data) / "cinegeist.db" if data else None)
+    try:
+        tmdb.enrich_catalog(
+            conn,
+            settings,
+            scope=scope,
+            region=region,
+            limit=limit,
+            force=force,
+            concurrency=concurrency,
+            console=console,
+        )
+    except tmdb.TMDBAuthError as error:
+        err_console.print(
+            f"[red]{error}[/red] Get a key at https://www.themoviedb.org/settings/api "
+            "and export TMDB_API_KEY."
+        )
+        raise typer.Exit(1) from error
+    finally:
+        conn.close()
 
 
 @app.command()
@@ -159,8 +222,10 @@ def config() -> None:
     table.add_row("request_timeout", f"{settings.request_timeout:g}s")
     table.add_row("max_retries", str(settings.max_retries))
     table.add_row(API_KEY_ENV, "set (redacted)" if settings.has_api_key else "not set")
+    table.add_row("TMDB auth", "set (redacted)" if settings.has_tmdb_auth else "not set")
     table.add_row("config file", f"{path} ({'exists' if path.exists() else 'not present'})")
     table.add_row("cache dir", str(cache_dir()))
+    table.add_row("data dir", str(data_dir()))
     console.print(table)
 
 

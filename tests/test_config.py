@@ -91,6 +91,29 @@ def test_redact_masks_the_key(tmp_path: Path) -> None:
     assert "***REDACTED***" in masked
 
 
+def test_tmdb_credentials_come_from_env(tmp_path: Path) -> None:
+    settings = load_settings(
+        env={"TMDB_API_KEY": "tmdb-v3", "TMDB_ACCESS_TOKEN": "tmdb-v4"},
+        config_file=_missing(tmp_path),
+    )
+    assert settings.has_tmdb_auth is True
+    assert settings.tmdb_api_key is not None
+    assert settings.tmdb_api_key.get_secret_value() == "tmdb-v3"
+    assert settings.tmdb_access_token.get_secret_value() == "tmdb-v4"
+
+
+def test_no_tmdb_auth_by_default(tmp_path: Path) -> None:
+    settings = load_settings(env={}, config_file=_missing(tmp_path))
+    assert settings.has_tmdb_auth is False
+
+
+def test_redact_masks_the_tmdb_key_and_hides_it_from_repr(tmp_path: Path) -> None:
+    secret = "tmdb-secret-xyz"
+    settings = load_settings(env={"TMDB_API_KEY": secret}, config_file=_missing(tmp_path))
+    assert secret not in repr(settings)
+    assert secret not in settings.redact(f"GET /movie/1?api_key={secret}")
+
+
 def test_unknown_config_keys_are_ignored(tmp_path: Path) -> None:
     cfg = tmp_path / "config.toml"
     cfg.write_text('model = "m"\nnonsense = 42\n', encoding="utf-8")
