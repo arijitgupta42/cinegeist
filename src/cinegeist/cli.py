@@ -11,6 +11,8 @@ The heavier commands (chat, search, profile, ...) arrive in later sessions.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -106,6 +108,41 @@ def ask(
 
     console.print(result.text)
     console.print(f"[dim]— {result.model}[/dim]")
+
+
+catalog_app = typer.Typer(
+    no_args_is_help=True,
+    help="Build and maintain the local movie catalog (SQLite + the genome memmap).",
+)
+app.add_typer(catalog_app, name="catalog")
+
+
+@catalog_app.command("build")
+def catalog_build(
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Rebuild the ingest and genome stages from the downloaded archive.",
+    ),
+    data: str | None = typer.Option(
+        None,
+        "--data-dir",
+        help="Where to write cinegeist.db and genome.npy (defaults to ./data).",
+    ),
+) -> None:
+    """Download MovieLens and build data/cinegeist.db and data/genome.npy.
+
+    Resumable: a partial download continues, and finished stages are skipped. The first run
+    fetches a few hundred MB and processes the tag genome, so it takes a while.
+    """
+    # Imported lazily so the light commands (models, config) don't pay numpy's import cost.
+    from .catalog.build import build_catalog
+
+    try:
+        build_catalog(data_dir=Path(data) if data else None, force=force, console=console)
+    except (OSError, ValueError) as error:
+        err_console.print(f"[red]Catalog build failed:[/red] {error}")
+        raise typer.Exit(1) from error
 
 
 @app.command()
