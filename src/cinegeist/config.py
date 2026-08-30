@@ -50,6 +50,17 @@ def cache_dir() -> Path:
     return Path(override) if override else Path.home() / ".cache" / APP_NAME
 
 
+def data_dir() -> Path:
+    """Directory for the built catalog artifacts (``data/`` under the working directory).
+
+    This is where ``cinegeist.db`` and ``genome.npy`` live. It is deliberately a relative
+    path by default — the catalog is a per-project build artifact, gitignored, and the plan
+    refers to it as ``data/`` throughout. Override with ``CINEGEIST_DATA_DIR``.
+    """
+    override = os.environ.get("CINEGEIST_DATA_DIR")
+    return Path(override) if override else Path("data")
+
+
 def redact_secrets(text: str, *secrets: str) -> str:
     """Replace every occurrence of each non-empty secret in ``text`` with a fixed mask."""
     for secret in secrets:
