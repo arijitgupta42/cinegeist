@@ -33,7 +33,7 @@ def test_build_populates_movies(tmp_path: Path, make_movielens_archive) -> None:
 
     conn = connect(data_dir / "cinegeist.db")
     rows = {r["movie_id"]: r for r in conn.execute("SELECT * FROM movies ORDER BY movie_id")}
-    assert set(rows) == {1, 2, 3}
+    assert set(rows) == {1, 2, 3, 4}
     assert rows[1]["clean_title"] == "Toy Story"
     assert rows[1]["year"] == 1995
     assert rows[1]["imdb_id"] == "tt0114709"
@@ -42,6 +42,8 @@ def test_build_populates_movies(tmp_path: Path, make_movielens_archive) -> None:
     assert rows[3]["year"] is None
     assert rows[3]["imdb_id"] is None
     assert rows[3]["tmdb_id"] is None
+    # Film 4 shares film 1's tmdb_id — both ingest fine (tmdb_id is not unique).
+    assert rows[4]["tmdb_id"] == 862
 
 
 def test_build_writes_the_genome_and_links_rows(tmp_path: Path, make_movielens_archive) -> None:
@@ -98,7 +100,7 @@ def test_rebuild_is_idempotent(tmp_path: Path, make_movielens_archive) -> None:
     build_catalog(data_dir=data_dir, console=QUIET)
 
     conn = connect(data_dir / "cinegeist.db")
-    assert conn.execute("SELECT COUNT(*) FROM movies").fetchone()[0] == 3
+    assert conn.execute("SELECT COUNT(*) FROM movies").fetchone()[0] == 4
     assert genome.load_genome(genome.default_genome_path(data_dir)).shape == (2, 3)
 
 
