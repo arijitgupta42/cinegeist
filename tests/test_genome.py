@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from cinegeist.catalog import genome
 
@@ -60,3 +61,24 @@ def test_loaded_genome_is_not_writable(tmp_path: Path) -> None:
     matrix = genome.load_genome(out)
     # Opened read-only, so the on-disk artifact can't be corrupted by a stray write.
     assert matrix.flags.writeable is False
+
+
+def test_cosine_scores_ranks_by_direction() -> None:
+    matrix = np.array([[1.0, 0.0], [0.0, 1.0], [1.0, 1.0]], dtype=np.float32)
+    scores = genome.cosine_scores(matrix, np.array([1.0, 0.0], dtype=np.float32))
+    assert scores[0] == pytest.approx(1.0)
+    assert scores[1] == pytest.approx(0.0)
+    assert scores[2] == pytest.approx(1.0 / np.sqrt(2.0), rel=1e-5)
+    assert int(np.argmax(scores)) == 0
+
+
+def test_cosine_scores_handles_zero_query() -> None:
+    matrix = np.array([[1.0, 0.0]], dtype=np.float32)
+    assert list(genome.cosine_scores(matrix, np.zeros(2, dtype=np.float32))) == [0.0]
+
+
+def test_cosine_scores_zero_row_is_zero_not_nan() -> None:
+    matrix = np.array([[0.0, 0.0], [1.0, 0.0]], dtype=np.float32)
+    scores = genome.cosine_scores(matrix, np.array([1.0, 0.0], dtype=np.float32))
+    assert scores[0] == 0.0
+    assert np.all(np.isfinite(scores))

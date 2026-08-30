@@ -11,6 +11,7 @@ The heavier commands (chat, search, profile, ...) arrive in later sessions.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import typer
@@ -209,6 +210,74 @@ def catalog_enrich(
 
 
 @app.command()
+def search(
+    query: str = typer.Argument(..., help="Descriptive words, e.g. 'bleak cerebral 90s'."),
+    limit: int = typer.Option(10, "--limit", "-n", help="How many films to show."),
+    data: str | None = typer.Option(
+        None, "--data-dir", help="Catalog location (defaults to ./data)."
+    ),
+) -> None:
+    """Search the catalog by tag genome — a deterministic debug view of retrieval.
+
+    Ranks genome-covered films by cosine similarity to the tags your phrase names, narrowed by
+    a decade or year if you mention one. No LLM, no profile: just the maths.
+    """
+    from .catalog import genome as genome_mod
+    from .catalog import search as search_mod
+    from .catalog.db import open_catalog
+
+    base = Path(data) if data else data_dir()
+    genome_path = genome_mod.default_genome_path(base)
+    if not genome_path.exists():
+        err_console.print(
+            "[red]No catalog found.[/red] Build one first with [bold]make catalog[/bold] "
+            "(or `cinegeist catalog build`)."
+        )
+        raise typer.Exit(1)
+
+    conn = open_catalog(base / "cinegeist.db")
+    try:
+        matrix = genome_mod.load_genome(genome_path)
+        try:
+            result = search_mod.search(conn, matrix, query, limit=limit)
+        except search_mod.NoTagsMatched as error:
+            err_console.print(
+                f"[yellow]{error}[/yellow] Try descriptive words like "
+                "'atmospheric', 'bleak', 'nonlinear', 'twist ending'."
+            )
+            raise typer.Exit(1) from error
+    finally:
+        conn.close()
+
+    tag_line = ", ".join(result.tags)
+    if result.year_range is not None:
+        low, high = result.year_range
+        tag_line += f"  ·  years {low}" + (f"–{high}" if high != low else "")
+    console.print(f"[dim]tags:[/dim] {tag_line}")
+
+    if not result.hits:
+        console.print("[yellow]Nothing in that range.[/yellow]")
+        return
+
+    table = Table(box=None, pad_edge=False)
+    table.add_column("#", justify="right", style="dim")
+    table.add_column("title")
+    table.add_column("year", justify="right", style="dim")
+    table.add_column("score", justify="right")
+    table.add_column("matched tags", style="cyan")
+    for rank, hit in enumerate(result.hits, start=1):
+        matched = ", ".join(f"{name} {value:.2f}" for name, value in hit.matched)
+        table.add_row(
+            str(rank),
+            hit.title,
+            str(hit.year) if hit.year else "—",
+            f"{hit.score:.3f}",
+            matched,
+        )
+    console.print(table)
+
+
+@app.command()
 def config() -> None:
     """Show the effective settings. The API key is never printed, only whether it is set."""
     settings = load_settings()
@@ -229,8 +298,26 @@ def config() -> None:
     console.print(table)
 
 
+def _force_utf8_output() -> None:
+    """Make stdout/stderr UTF-8 so Rich's progress glyphs survive Windows.
+
+    The progress spinners use Braille characters. On a legacy Windows code page, or when output
+    is redirected through a pipe, Python's stream encoder defaults to something like cp1252 and
+    raises UnicodeEncodeError on those glyphs. Reconfiguring to UTF-8 (with a lenient error
+    handler as a backstop) keeps the catalog build from dying on cosmetics.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            try:
+                reconfigure(encoding="utf-8", errors="backslashreplace")
+            except (ValueError, OSError):
+                pass
+
+
 def run() -> None:
     """Console-script entry point (see ``[project.scripts]`` in pyproject.toml)."""
+    _force_utf8_output()
     app()
 
 
