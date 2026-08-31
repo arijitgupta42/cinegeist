@@ -2,8 +2,9 @@
 
 Free-model ids rotate constantly, so this project never hardcodes one as the default
 (hard rule 3). Instead it fetches the live list from ``{base}/models``, keeps the entries
-priced at zero for both prompt and completion, ranks them by a small curated preference
-order, and caches the result for a day.
+priced at zero for both prompt and completion *and* usable for chat — text in, text-only out,
+which drops the odd free media model like Google's Lyria that would otherwise top the list —
+ranks them by a small curated preference order, and caches the result for a day.
 
 ``FALLBACK_FREE_MODELS`` is a last resort used only when the endpoint can't be reached.
 It is assumed **stale** — any entry may have lost its free tier — so it is never cached and
@@ -62,6 +63,46 @@ def _is_free(model: dict[str, Any]) -> bool:
     return _is_zero(pricing.get("prompt")) and _is_zero(pricing.get("completion"))
 
 
+def _as_modality_set(value: Any) -> set[str]:
+    if not isinstance(value, list):
+        return set()
+    return {str(item).strip().lower() for item in value if str(item).strip()}
+
+
+def _modalities(model: dict[str, Any], list_key: str, side: int) -> set[str]:
+    """The input (``side=0``) or output (``side=1``) modalities of a model.
+
+    Prefers the explicit ``input_modalities`` / ``output_modalities`` list; falls back to the
+    half of a ``"text+image->text+audio"`` ``modality`` string on the requested side.
+    """
+    arch = model.get("architecture") or {}
+    explicit = _as_modality_set(arch.get(list_key))
+    if explicit:
+        return explicit
+    modality = arch.get("modality")
+    if isinstance(modality, str) and "->" in modality:
+        half = modality.split("->", 1)[side]
+        return {part.strip().lower() for part in half.split("+") if part.strip()}
+    return set()
+
+
+def _is_text_model(model: dict[str, Any]) -> bool:
+    """A model we can prompt with text and that replies with text only.
+
+    OpenRouter lists the occasional free entry that is really a media model — Google's Lyria, for
+    one, declares an ``audio`` output alongside ``text`` — and those can't answer a chat
+    completion, so they must be dropped before ranking or they surface at the top of the free list
+    and break every LLM feature. Metadata is trusted only to *exclude*: a model is rejected only
+    when the data positively says it emits a non-text modality (audio, image, video) or can't take
+    text in. A model with no architecture info is kept, so a missing field never hides a good one.
+    """
+    outputs = _modalities(model, "output_modalities", side=1)
+    inputs = _modalities(model, "input_modalities", side=0)
+    output_is_text_only = outputs == {"text"} if outputs else True
+    input_accepts_text = "text" in inputs if inputs else True
+    return output_is_text_only and input_accepts_text
+
+
 def _rank_key(model: dict[str, Any]) -> tuple[int, int, str]:
     model_id = model.get("id", "")
     preference = len(_PREFERENCE_ORDER)  # unknown models sort after every known one
@@ -77,7 +118,8 @@ def _rank_key(model: dict[str, Any]) -> tuple[int, int, str]:
 
 
 def _rank_free_models(models: Iterable[dict[str, Any]]) -> list[str]:
-    free = sorted((m for m in models if _is_free(m)), key=_rank_key)
+    usable = (m for m in models if _is_free(m) and _is_text_model(m))
+    free = sorted(usable, key=_rank_key)
     return [m["id"] for m in free if m.get("id")]
 
 
