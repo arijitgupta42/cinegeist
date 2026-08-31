@@ -133,6 +133,14 @@ class OpenRouterClient:
         assert last_error is not None  # the loop ran at least once
         raise last_error
 
+    def redact(self, text: str) -> str:
+        """Mask the API key (and any other secret) wherever it appears in ``text``.
+
+        Public so callers that build their own error strings around a response — the extractor's
+        retry nudge, for one — can keep the key out of them too (hard rule 5).
+        """
+        return self._redact(text)
+
     def close(self) -> None:
         if self._owns_client:
             self._client.close()
