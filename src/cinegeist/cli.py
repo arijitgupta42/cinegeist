@@ -16,6 +16,7 @@ from pathlib import Path
 
 import typer
 from rich.console import Console
+from rich.prompt import Prompt
 from rich.table import Table
 
 from . import __version__
@@ -109,6 +110,100 @@ def ask(
 
     console.print(result.text)
     console.print(f"[dim]— {result.model}[/dim]")
+
+
+class _RichConsoleIO:
+    """The engine's :class:`ConversationIO` for a real terminal, built on ``rich``.
+
+    Kept structural (no import of the engine's types) so the light CLI commands don't pay numpy's
+    import cost. Choices are numbered; typing a number picks it, and empty input takes the first —
+    the escape hatch is always the last option, so ``[enter][enter]…`` never traps the user.
+    """
+
+    def __init__(self, out: Console) -> None:
+        self._console = out
+
+    def say(self, text: str) -> None:
+        self._console.print(f"\n{text}")
+
+    def ask_text(self, prompt: str) -> str:
+        self._console.print(f"\n[bold]{prompt}[/bold]")
+        return Prompt.ask("[cyan]»[/cyan]", console=self._console, default="").strip()
+
+    def ask_choice(self, prompt: str, options) -> str:
+        self._console.print(f"\n[bold]{prompt}[/bold]")
+        for index, option in enumerate(options, start=1):
+            self._console.print(f"  [cyan]{index}[/cyan]. {option.label}")
+        while True:
+            raw = Prompt.ask("[cyan]»[/cyan]", console=self._console, default="1").strip()
+            if raw.isdigit() and 1 <= int(raw) <= len(options):
+                return options[int(raw) - 1].key
+            self._console.print("[dim]Pick one of the numbers.[/dim]")
+
+    def show_presentation(self, presentation, *, header: str) -> None:
+        self._console.print(f"\n[bold]{header}[/bold]")
+        position = 1
+        for pick in presentation.picks:
+            self._render_film(position, pick)
+            position += 1
+        if presentation.wildcard is not None:
+            self._render_film(position, presentation.wildcard)
+
+    def _render_film(self, index: int, presented) -> None:
+        film = presented.film
+        year = f" [dim]({film.year})[/dim]" if film.year else ""
+        flag = " [magenta]· wildcard[/magenta]" if presented.is_wildcard else ""
+        self._console.print(f"[bold]{index}. {film.title}[/bold]{year}{flag}")
+        self._console.print(f"   [dim]{presented.explanation.text}[/dim]")
+
+
+@app.command()
+def chat(
+    offline: bool = typer.Option(
+        False, "--offline", help="No LLM calls: fixed phrasing, click-driven, works without a key."
+    ),
+    model: str | None = typer.Option(
+        None, "--model", "-m", help="Model id to use (overrides config and auto-select)."
+    ),
+    data: str | None = typer.Option(
+        None, "--data-dir", help="Catalog location (defaults to ./data)."
+    ),
+) -> None:
+    """React to a few films and get tonight's picks — the main experience.
+
+    Online it phrases questions and explains picks with a free model (needs OPENROUTER_API_KEY);
+    with --offline, or no key, it runs the same recommender click-only, with fixed phrasing.
+    """
+    from .convo.engine import Engine
+
+    settings = load_settings(overrides={"model": model})
+    conn, matrix = _open_catalog_and_genome(data)
+
+    online = not offline
+    models: tuple[str, ...] = ()
+    if online and not settings.has_api_key:
+        err_console.print(
+            f"[yellow]{API_KEY_ENV} is not set — running offline.[/yellow] "
+            "Set a key for phrased questions and explanations, or pass --offline to silence this."
+        )
+        online = False
+    if online:
+        models = (settings.model,) if settings.model else tuple(free_models(settings))
+        if not models:
+            err_console.print("[yellow]No models available — running offline.[/yellow]")
+            online = False
+
+    io = _RichConsoleIO(console)
+    try:
+        if online:
+            with OpenRouterClient(settings) as client:
+                Engine(conn, matrix, io, settings, client=client, models=models).run()
+        else:
+            Engine(conn, matrix, io, settings, offline=True).run()
+    except (KeyboardInterrupt, EOFError):
+        console.print("\n[dim]Okay — come back any time.[/dim]")
+    finally:
+        conn.close()
 
 
 catalog_app = typer.Typer(
