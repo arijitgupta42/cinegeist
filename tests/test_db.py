@@ -27,6 +27,8 @@ EXPECTED_TABLES = {
     "movie_watch_providers",
     "collections",
     "build_state",
+    "preference_events",
+    "profile_snapshots",
 }
 
 
@@ -50,7 +52,7 @@ def test_migrate_sets_the_user_version(tmp_path: Path) -> None:
     conn = db.connect(tmp_path / "catalog.db")
     assert db.user_version(conn) == 0
     applied = db.migrate(conn)
-    assert applied == [1, 2]
+    assert applied == [1, 2, 3]
     assert db.user_version(conn) == db.SCHEMA_VERSION
 
 

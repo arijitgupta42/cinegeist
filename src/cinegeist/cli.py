@@ -277,6 +277,171 @@ def search(
     console.print(table)
 
 
+profile_app = typer.Typer(
+    no_args_is_help=True,
+    help="Inspect and correct the taste profile the recommender has learned about you.",
+)
+app.add_typer(profile_app, name="profile")
+
+
+def _open_catalog_and_genome(data: str | None):
+    """Open the catalog and load the genome memmap, or exit with the build hint."""
+    from .catalog import genome as genome_mod
+    from .catalog.db import open_catalog
+
+    base = Path(data) if data else data_dir()
+    genome_path = genome_mod.default_genome_path(base)
+    if not genome_path.exists():
+        err_console.print(
+            "[red]No catalog found.[/red] Build one first with [bold]make catalog[/bold] "
+            "(or `cinegeist catalog build`)."
+        )
+        raise typer.Exit(1)
+    conn = open_catalog(base / "cinegeist.db")
+    return conn, genome_mod.load_genome(genome_path)
+
+
+def _open_catalog_only(data: str | None):
+    """Open just the catalog database (no genome), or exit if it is not there."""
+    from .catalog.db import open_catalog
+
+    base = Path(data) if data else data_dir()
+    db_path = base / "cinegeist.db"
+    if not db_path.exists():
+        err_console.print(
+            "[red]No catalog found.[/red] Build one first with [bold]make catalog[/bold]."
+        )
+        raise typer.Exit(1)
+    return open_catalog(db_path)
+
+
+def _truncate(text: str, limit: int = 70) -> str:
+    text = " ".join(text.split())
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+def _describe_event(conn, event) -> str:
+    """A short human description of one event for forget/confirm output."""
+    if event.subject_kind == "movie":
+        row = conn.execute(
+            "SELECT clean_title, title FROM movies WHERE movie_id = ?", (event.movie_id,)
+        ).fetchone()
+        title = (row["clean_title"] or row["title"]) if row else f"movie {event.subject}"
+        verb = "liked" if event.value >= 0 else "disliked"
+        label = f"{verb} '{title}'"
+    elif event.subject_kind == "tag":
+        row = conn.execute(
+            "SELECT name FROM genome_tags WHERE tag_id = ?", (event.tag_id,)
+        ).fetchone()
+        name = row["name"] if row else f"tag {event.subject}"
+        label = f"axis '{name}' {event.value:+.2f}"
+    else:
+        label = f"{event.subject} = {event.value:g}"
+    if event.evidence:
+        label += f" — “{_truncate(event.evidence)}”"
+    return label
+
+
+def _render_axes(heading: str, axes: list) -> None:
+    if not axes:
+        return
+    console.print(f"\n[bold]{heading}[/bold]")
+    table = Table(box=None, pad_edge=False, show_header=False)
+    table.add_column("tag")
+    table.add_column("weight", justify="right")
+    table.add_column("why")
+    for axis in axes:
+        if axis.evidence:
+            why = f"[cyan]“{_truncate(axis.evidence)}”[/cyan]"
+        else:
+            why = f"[dim]{axis.source}[/dim]"
+        table.add_row(axis.name, f"{axis.weight:+.2f}", why)
+    console.print(table)
+
+
+@profile_app.command("show")
+def profile_show(
+    limit: int = typer.Option(8, "--limit", "-n", help="How many axes to show per side."),
+    data: str | None = typer.Option(
+        None, "--data-dir", help="Catalog location (defaults to ./data)."
+    ),
+) -> None:
+    """Print the taste profile: its strongest affinities and aversions, with your own words."""
+    from .profile import update as profile_update
+
+    conn, matrix = _open_catalog_and_genome(data)
+    try:
+        profile = profile_update.compute_profile(conn, matrix)
+    finally:
+        conn.close()
+
+    if profile.is_empty:
+        console.print(
+            "[yellow]No taste profile yet.[/yellow] React to a few films with "
+            "[bold]cinegeist chat[/bold] and this fills in."
+        )
+        return
+
+    sessions = f"{profile.session_count} session" + ("" if profile.session_count == 1 else "s")
+    events = f"{profile.event_count} event" + ("" if profile.event_count == 1 else "s")
+    console.print(
+        f"[bold]Your taste profile[/bold]  [dim]({events} across {sessions} · "
+        f"evidence mass {profile.total_weight:.1f})[/dim]"
+    )
+    _render_axes("Drawn toward", profile.affinities[:limit])
+    _render_axes("Pushed away from", profile.aversions[:limit])
+
+
+@profile_app.command("forget")
+def profile_forget(
+    event_id: int = typer.Argument(..., help="The id of the event to delete (see `profile show`)."),
+    data: str | None = typer.Option(
+        None, "--data-dir", help="Catalog location (defaults to ./data)."
+    ),
+) -> None:
+    """Delete one piece of evidence when the system latched onto something wrong."""
+    from .profile import store as profile_store
+
+    conn = _open_catalog_only(data)
+    try:
+        event = profile_store.get_event(conn, event_id)
+        if event is None:
+            err_console.print(f"[yellow]No event with id {event_id}.[/yellow]")
+            raise typer.Exit(1)
+        description = _describe_event(conn, event)
+        profile_store.forget_event(conn, event_id)
+    finally:
+        conn.close()
+    console.print(
+        f"[green]Forgot event {event_id}[/green] ({description}). "
+        "The profile recomputes without it."
+    )
+
+
+@profile_app.command("reset")
+def profile_reset(
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt."),
+    data: str | None = typer.Option(
+        None, "--data-dir", help="Catalog location (defaults to ./data)."
+    ),
+) -> None:
+    """Erase the whole taste profile and start over. Asks first unless you pass --yes."""
+    from .profile import store as profile_store
+
+    conn = _open_catalog_only(data)
+    try:
+        count = profile_store.count_events(conn)
+        if count == 0:
+            console.print("Nothing to reset — the profile is already empty.")
+            return
+        if not yes:
+            typer.confirm(f"Delete all {count} events and start over?", abort=True)
+        removed = profile_store.reset_profile(conn)
+    finally:
+        conn.close()
+    console.print(f"[green]Reset.[/green] Removed {removed} events.")
+
+
 @app.command()
 def config() -> None:
     """Show the effective settings. The API key is never printed, only whether it is set."""
