@@ -20,7 +20,7 @@ from pathlib import Path
 from ..config import data_dir
 
 # The highest schema version this build knows how to produce.
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 # Migrations in apply order: (target user_version, resource filename within this package).
 # schema.sql brings a blank database up to version 1; each later file evolves it. Order
@@ -28,6 +28,7 @@ SCHEMA_VERSION = 2
 _MIGRATIONS: tuple[tuple[int, str], ...] = (
     (1, "schema.sql"),
     (2, "migration_0002_tmdb_id_not_unique.sql"),
+    (3, "migration_0003_profile.sql"),
 )
 
 _PACKAGE = "cinegeist.catalog"
