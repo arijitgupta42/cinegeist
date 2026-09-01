@@ -47,11 +47,11 @@ function renderChrome(): void {
       </div>
     </header>
 
-    <div class="strip" id="how" aria-label="How it works">
-      <div class="seg active g"><span class="sq green"></span><span class="mono">React</span><span class="step mono">01</span></div>
-      <div class="seg"><span class="sq cyan"></span><span class="mono">Learn</span><span class="step mono">02</span></div>
-      <div class="seg"><span class="sq magenta"></span><span class="mono">Recommend</span><span class="step mono">03</span></div>
-      <div class="seg"><span class="sq orange"></span><span class="mono">Explain</span><span class="step mono">04</span></div>
+    <div class="strip" id="how" role="tablist" aria-label="How it works — pick a stage to view">
+      <button class="seg active" role="tab" data-stage="react" aria-selected="true"><span class="sq green"></span><span class="mono">React</span><span class="step mono">01</span></button>
+      <button class="seg" role="tab" data-stage="learn" aria-selected="false"><span class="sq cyan"></span><span class="mono">Learn</span><span class="step mono">02</span></button>
+      <button class="seg" role="tab" data-stage="recommend" aria-selected="false"><span class="sq magenta"></span><span class="mono">Recommend</span><span class="step mono">03</span></button>
+      <button class="seg" role="tab" data-stage="explain" aria-selected="false"><span class="sq orange"></span><span class="mono">Explain</span><span class="step mono">04</span></button>
     </div>
 
     <main class="wrap" id="stage">
@@ -140,7 +140,8 @@ async function main(): Promise<void> {
     return;
   }
 
-  const conversation = new Conversation(panel(), shard, probes);
+  const strip = app.querySelector<HTMLElement>(".strip")!;
+  const conversation = new Conversation(panel(), strip, shard, probes);
   const begin = (): void => {
     conversation.start();
     scrollToStage();
