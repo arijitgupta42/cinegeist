@@ -17,8 +17,9 @@ import { selectDemoProbe, shouldStop } from "./probes.ts";
 import { assess, REASON_NO_CLOSE_NEIGHBOUR, type CoverageVerdict } from "./coverage.ts";
 import { DemoSession, type TasteAxis } from "./session.ts";
 import { tasteBarsHtml } from "./viz/bars.ts";
-import { buildMap, mountMap } from "./viz/learn-map.ts";
+import { buildMap, mountMap, prefersReducedMotion } from "./viz/learn-map.ts";
 import type { TasteMap } from "./viz/space3d.ts";
+import { buildEvidenceGraph, EvidenceView, type PickInput } from "./viz/evidence.ts";
 import {
   filmTopTags,
   TAG_SENTINEL,
@@ -48,6 +49,7 @@ export class Conversation {
   private currentStage: Stage = "react";
   private map: TasteMap | null = null;
   private mapToken = 0; // invalidates in-flight async map mounts when the stage changes
+  private evidence: EvidenceView | null = null;
 
   constructor(
     private mount: HTMLElement,
@@ -78,12 +80,16 @@ export class Conversation {
 
   /** Switch the active stage, sync the strip, and render that stage's view into the panel. */
   goToStage(stage: Stage): void {
-    // Leaving any stage tears down the 3D map if one is up, and invalidates a mount still loading.
+    // Leaving any stage tears down the visualizations, and invalidates a map mount still loading.
     this.currentStage = stage;
     this.mapToken++;
     if (this.map) {
       this.map.dispose();
       this.map = null;
+    }
+    if (this.evidence) {
+      this.evidence.dispose();
+      this.evidence = null;
     }
     this.strip.querySelectorAll<HTMLElement>("[data-stage]").forEach((btn) => {
       const active = btn.dataset.stage === stage;
@@ -289,13 +295,34 @@ export class Conversation {
     this.mount.innerHTML = `
       <div class="panel-head"><span class="sq orange"></span><span class="mono">Explain</span>
         <span class="mono progress">traced to what you reacted to</span></div>
-      <p class="note">Each pick, and the tags it matches — every tag links back to the films you actually chose.</p>
-      <div class="why-list">${cards || `<p class="note">React to a few pairs first.</p>`}</div>
+      <p class="note">The films you chose (left) feed the tags that make up your taste (middle), which your picks
+      (right) hang off. Line thickness is how much it counts; cyan is drawn toward, magenta pushed away.
+      Click a tag to light up everything that produced it.</p>
+      <div class="evidence-wrap" id="evidence"></div>
+      <details class="ev-text"><summary class="mono">Read it as text</summary>
+        <div class="why-list">${cards}</div>
+      </details>
       <div class="controls">
         <button class="btn" data-go="recommend"><span class="mono">Back to picks</span></button>
         <button class="btn" data-go="react"><span class="mono">Answer more pairs</span></button>
       </div>`;
     this.wireNav();
+
+    const container = this.mount.querySelector<HTMLElement>("#evidence");
+    if (!container) return;
+    const pickInputs: PickInput[] = [
+      ...recs.picks.map((f) => this.pickInput(f, pool, false)),
+      ...(recs.wildcard ? [this.pickInput(recs.wildcard, pool, true)] : []),
+    ];
+    const graph = buildEvidenceGraph(this.session.tasteAxes(1000), pickInputs);
+    this.evidence = new EvidenceView(container, graph, prefersReducedMotion());
+    this.evidence.render();
+  }
+
+  private pickInput(f: ScoredFilm, pool: Pool, wildcard: boolean): PickInput {
+    const idx = pool.shardIndex[f.poolIndex];
+    const film = this.shard.films[idx];
+    return { filmId: film.id, title: film.title, tags: this.topTagNames(idx, 3), wildcard };
   }
 
   // One pick's "why": its matched tags, each traced to the reacted films that carry them. This is the
