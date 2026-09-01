@@ -852,6 +852,27 @@ main {
   font-size: 0.78rem;
   max-width: 70ch;
 }
+/* TMDB attribution: their official logo, self-hosted, beside the required disclaimer line */
+.foot .colophon {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1.4rem;
+  flex-wrap: wrap;
+}
+.foot .tmdb {
+  flex: 0 0 auto;
+  display: inline-flex;
+}
+.foot .tmdb img {
+  height: 20px;
+  width: auto;
+  display: block;
+}
+.foot .legal {
+  margin: 0;
+  flex: 1 1 260px;
+}
 .foot .credit {
   margin-top: 0.6rem;
   color: var(--ink-faint);
