@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { EXCLUDED_TAGS } from "./constants.ts";
 import { decodeShard, filmTopTags, TAG_SENTINEL, TOP_TAGS_PER_FILM, type ShardManifest } from "./shard.ts";
 
 // Decode the actual committed shard (the one Pages will serve) so this test guards the real bytes,
@@ -52,5 +53,27 @@ describe("decodeShard", () => {
     expect(typeof first.id).toBe("number");
     expect(typeof first.title).toBe("string");
     expect(first.title.length).toBeGreaterThan(0);
+  });
+});
+
+describe("non-content tag exclusion", () => {
+  it("flags the reception/verdict tags present in the shard", () => {
+    // The committed shard predates the exclusion, so it still lists some — decode must catch them.
+    expect(shard.excludedPositions.size).toBeGreaterThan(0);
+    for (const pos of shard.excludedPositions) {
+      expect(EXCLUDED_TAGS.has(shard.tagNames.get(pos)!)).toBe(true);
+    }
+    // The tag that started this: if the shard has "imdb top 250", it must be excluded.
+    const imdb = [...shard.tagNames.entries()].find(([, name]) => name === "imdb top 250");
+    if (imdb) expect(shard.excludedPositions.has(imdb[0])).toBe(true);
+  });
+
+  it("never surfaces an excluded tag in any film's top tags", () => {
+    for (let i = 0; i < shard.nFilms; i++) {
+      for (const t of filmTopTags(shard, i)) {
+        expect(shard.excludedPositions.has(t.position)).toBe(false);
+        expect(EXCLUDED_TAGS.has(shard.tagNames.get(t.position) ?? "")).toBe(false);
+      }
+    }
   });
 });
