@@ -66,6 +66,10 @@ function renderChrome(): void {
         gone when the tab closes. This product uses the TMDB API but is not endorsed or certified by
         TMDB. Movie tag data from MovieLens (GroupLens Research).
       </p>
+      <p class="credit">
+        Visual design inspired by
+        <a href="https://www.plasticity.xyz/" target="_blank" rel="noopener noreferrer">plasticity.xyz</a>.
+      </p>
     </footer>
   `;
 

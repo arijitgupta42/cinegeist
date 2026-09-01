@@ -403,6 +403,18 @@ main {
   font-size: 0.78rem;
   max-width: 70ch;
 }
+.foot .credit {
+  margin-top: 0.6rem;
+  color: var(--ink-faint);
+  font-size: 0.78rem;
+}
+.foot .credit a {
+  color: var(--ink-dim);
+  text-underline-offset: 3px;
+}
+.foot .credit a:hover {
+  color: var(--ink);
+}
 
 /* -- responsive -------------------------------------------------------------------- */
 
