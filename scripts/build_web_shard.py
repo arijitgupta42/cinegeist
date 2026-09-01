@@ -14,10 +14,13 @@ import json
 import sys
 from pathlib import Path
 
+import numpy as np
+
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
 from cinegeist.catalog import db, genome  # noqa: E402
+from cinegeist.catalog.excluded_tags import excluded_positions  # noqa: E402
 from cinegeist.config import data_dir  # noqa: E402
 from cinegeist.webshard.build import build_probes, build_shard  # noqa: E402
 
@@ -40,6 +43,15 @@ def main() -> None:
     conn = db.open_catalog(db_path)
     matrix = genome.load_genome(genome_path)
     print(f"catalog: {matrix.shape[0]} genome films x {matrix.shape[1]} tags")
+
+    # Zero the non-content tag columns (reception/verdict tags, catalog/excluded_tags.py) before the
+    # SVD, top-tag tables, and probe selection read the matrix, so none of them can carry those tags.
+    # Copy first — never mutate the on-disk memmap.
+    excluded = sorted(excluded_positions(conn))
+    if excluded:
+        matrix = np.array(matrix)
+        matrix[:, excluded] = 0.0
+        print(f"zeroed {len(excluded)} non-content tag columns")
 
     build = build_shard(conn, matrix)
     probes = build_probes(conn, matrix)

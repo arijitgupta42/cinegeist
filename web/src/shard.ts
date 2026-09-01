@@ -9,6 +9,8 @@
 // Decoding is pure (`decodeShard`) so it is unit-tested against the committed shard with no browser
 // APIs; only `loadShard` touches the network and IndexedDB.
 
+import { EXCLUDED_TAGS } from "./constants.ts";
+
 export interface ShardFilm {
   id: number;
   tmdb: number | null;
@@ -85,6 +87,9 @@ export interface DecodedShard {
   // Per-film coverage fraction in [0, 1] (the honesty byte, §8.4), rescaled from the packed byte.
   coverage: Float32Array;
   tagNames: Map<number, string>;
+  // Genome positions of the non-content tags (reception/verdict, spec/excluded_tags.json), so
+  // filmTopTags can drop them from every tag the demo shows and reasons about.
+  excludedPositions: Set<number>;
   films: ShardFilm[];
   scales: Float32Array;
 }
@@ -135,6 +140,11 @@ export function decodeShard(manifest: ShardManifest, bin: ArrayBuffer): DecodedS
   const tagNames = new Map<number, string>();
   for (const [pos, name] of Object.entries(manifest.tag_names)) tagNames.set(Number(pos), name);
 
+  // Reception/verdict tags to drop from what the demo surfaces (mirrors the columns build_web_shard
+  // zeroes for a fresh shard; applied here too so the committed shard is clean without a rebuild).
+  const excludedPositions = new Set<number>();
+  for (const [pos, name] of tagNames) if (EXCLUDED_TAGS.has(name)) excludedPositions.add(pos);
+
   return {
     version: manifest.version,
     generatedAt: manifest.generated_at,
@@ -149,6 +159,7 @@ export function decodeShard(manifest: ShardManifest, bin: ArrayBuffer): DecodedS
     tagScore,
     coverage,
     tagNames,
+    excludedPositions,
     films: manifest.films,
     scales,
   };
@@ -161,6 +172,7 @@ export function filmTopTags(shard: DecodedShard, filmIndex: number): Array<{ pos
   for (let j = 0; j < TOP_TAGS_PER_FILM; j++) {
     const pos = shard.tagPos[base + j];
     if (pos === TAG_SENTINEL) break;
+    if (shard.excludedPositions.has(pos)) continue; // drop reception/verdict tags (keep the rest)
     out.push({ position: pos, relevance: shard.tagScore[base + j] / 255 });
   }
   return out;

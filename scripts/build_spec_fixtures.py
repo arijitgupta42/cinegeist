@@ -24,6 +24,8 @@ sys.path.insert(0, str(ROOT / "tests"))
 
 import spec_runner  # noqa: E402  (needs the tests dir on sys.path first)
 
+from cinegeist.catalog.excluded_tags import EXCLUDED_TAGS  # noqa: E402
+
 SPEC = ROOT / "spec"
 
 
@@ -368,6 +370,7 @@ def _write(relpath: str, obj: Any) -> None:
 
 def main() -> None:
     _write("constants.json", spec_runner.constants())
+    _write("excluded_tags.json", {"excluded_tags": sorted(EXCLUDED_TAGS)})
     _write("scoring/cases.json", {"cases": _attach(scoring_cases(), spec_runner.run_scoring_case)})
     _write("scoring/decay.json", {"cases": _attach(decay_cases(), spec_runner.run_decay_case)})
     _write(
