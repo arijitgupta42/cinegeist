@@ -40,6 +40,26 @@ export interface ShardManifest {
   films: ShardFilm[];
 }
 
+// The demo's precomputed questions (probes.json), baked offline because the browser has no LLM to
+// phrase them (plan.md §8.2). The demo chooses which to ask at runtime by information gain.
+export interface PrecomputedProbe {
+  axis: number;
+  name: string;
+  spread: number;
+  high: { id: number; title: string; year: number | null };
+  low: { id: number; title: string; year: number | null };
+  question: string;
+}
+
+export interface ProbesFile {
+  version: number;
+  generated_at: string;
+  seed: number;
+  n_films: number;
+  question_template: string;
+  probes: PrecomputedProbe[];
+}
+
 // The number of top-tag slots packed per film (build.py TOP_TAGS_PER_FILM). A film with fewer
 // non-zero tags pads unused slots with TAG_SENTINEL, which no real genome position reaches.
 export const TOP_TAGS_PER_FILM = 12;
@@ -173,13 +193,13 @@ function openDb(): Promise<IDBDatabase> {
   });
 }
 
-async function idbGet(key: string): Promise<CachedShard | undefined> {
+async function idbGet<T>(key: string): Promise<T | undefined> {
   try {
     const db = await openDb();
-    return await new Promise<CachedShard | undefined>((resolve, reject) => {
+    return await new Promise<T | undefined>((resolve, reject) => {
       const tx = db.transaction(STORE, "readonly");
       const req = tx.objectStore(STORE).get(key);
-      req.onsuccess = () => resolve(req.result as CachedShard | undefined);
+      req.onsuccess = () => resolve(req.result as T | undefined);
       req.onerror = () => reject(req.error);
       tx.oncomplete = () => db.close();
     });
@@ -188,7 +208,7 @@ async function idbGet(key: string): Promise<CachedShard | undefined> {
   }
 }
 
-async function idbPut(key: string, value: CachedShard): Promise<void> {
+async function idbPut<T>(key: string, value: T): Promise<void> {
   try {
     const db = await openDb();
     await new Promise<void>((resolve, reject) => {
@@ -232,12 +252,22 @@ export async function clearShardCache(): Promise<void> {
  */
 export async function loadShard(baseUrl: string): Promise<DecodedShard> {
   const jsonUrl = `${baseUrl}shard/shard.json`;
-  const cached = await idbGet(jsonUrl);
+  const cached = await idbGet<CachedShard>(jsonUrl);
   if (cached) return decodeShard(cached.manifest, cached.bin);
 
   const manifest = (await (await fetch(jsonUrl)).json()) as ShardManifest;
   const binUrl = `${baseUrl}shard/${manifest.binary.file}`;
   const bin = await (await fetch(binUrl)).arrayBuffer();
-  await idbPut(jsonUrl, { manifest, bin });
+  await idbPut<CachedShard>(jsonUrl, { manifest, bin });
   return decodeShard(manifest, bin);
+}
+
+/** Load the precomputed probe questions, preferring the IndexedDB cache over the network. */
+export async function loadProbes(baseUrl: string): Promise<ProbesFile> {
+  const url = `${baseUrl}shard/probes.json`;
+  const cached = await idbGet<ProbesFile>(url);
+  if (cached) return cached;
+  const probes = (await (await fetch(url)).json()) as ProbesFile;
+  await idbPut<ProbesFile>(url, probes);
+  return probes;
 }

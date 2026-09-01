@@ -10,6 +10,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { computeProfile, type DecayEvent, type MovieRow, type TagRow } from "./profile.ts";
 import { recommend, scorePool, type Candidate } from "./score.ts";
+import { chooseProbe, shouldStop, wantsToStop, type ProbeMovie } from "./probes.ts";
 import { SCORING } from "./constants.ts";
 
 const TOLERANCE = 1e-5;
@@ -134,6 +135,66 @@ describe("scoring/decay.json", () => {
   const cases = load("scoring/decay.json").cases as any[];
   for (const c of cases) {
     it(c.name, () => assertClose(runDecayCase(c), c.expected));
+  }
+});
+
+// -- probes and stopping -------------------------------------------------------------
+
+function runProbeCase(c: any): any {
+  const movies: ProbeMovie[] = c.movies.map((m: any) => ({
+    movieId: m.movie_id,
+    genomeRow: m.genome_row,
+    title: m.clean_title || m.title || `M${m.movie_id}`,
+    year: m.year ?? null,
+    vector: m.vector,
+  }));
+  const names = new Map<number, string>();
+  for (const t of c.tags) names.set(t.position, t.name);
+  const probe = chooseProbe(movies, c.n_tags, c.profile, names, {
+    excluded: new Set<number>(c.excluded_movie_ids ?? []),
+    askedPositions: new Set<number>(c.asked_positions ?? []),
+    uncertainty: c.uncertainty ?? null,
+    poolTop: c.pool_top,
+  });
+  if (probe === null) return { probe: null };
+  return {
+    probe: {
+      axis_position: probe.axisPosition,
+      axis_name: probe.axisName,
+      spread: probe.spread,
+      film_high_id: probe.filmHighId,
+      film_low_id: probe.filmLowId,
+      question: probe.question,
+    },
+  };
+}
+
+describe("scoring/probes.json — probe selection", () => {
+  const cases = load("scoring/probes.json").probe_selection as any[];
+  for (const c of cases) {
+    it(c.name, () => assertClose(runProbeCase(c), c.expected));
+  }
+});
+
+describe("scoring/probes.json — stopping", () => {
+  const cases = load("scoring/probes.json").stopping as any[];
+  for (const c of cases) {
+    it(c.name, () => {
+      const d = shouldStop({
+        turn: c.turn,
+        top5History: c.top5_history,
+        topScores: c.top_scores ?? null,
+        userRequested: c.user_requested ?? false,
+      });
+      assertClose({ stop: d.stop, reason: d.reason }, c.expected);
+    });
+  }
+});
+
+describe("scoring/probes.json — escape hatch", () => {
+  const cases = load("scoring/probes.json").escape_hatch as any[];
+  for (const c of cases) {
+    it(c.text, () => assertClose({ wants_to_stop: wantsToStop(c.text) }, c.expected));
   }
 });
 
