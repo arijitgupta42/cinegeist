@@ -88,6 +88,10 @@ is from MovieLens (GroupLens Research). See [`DATA_LICENSES.md`](DATA_LICENSES.m
 citations and terms. Neither dataset is redistributed here; both are downloaded at build
 time.
 
+## Acknowledgements
+
+Built with [Claude Code](https://claude.com/claude-code) by [Anthropic](https://anthropic.com)
+
 ## Licence
 
 MIT — see [`LICENSE`](LICENSE).
