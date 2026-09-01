@@ -1,9 +1,9 @@
 """Unit tests for the browser-shard build (plan.md §8.3).
 
-The pure helpers — sampling, SVD projection, int8 quantisation, PCA, top tags — are tested against
-tiny synthetic matrices so the whole pipeline runs in CI without the 59 MB genome. A second group
-validates the *committed* shard artifact (structure and size) rather than rebuilding it, since CI
-has no catalog to rebuild from.
+The pure helpers — sampling, SVD projection, int8 quantisation, PCA, top tags, coverage, and probe
+grounding — are tested against tiny synthetic matrices so the whole pipeline runs in CI without the
+59 MB genome. A second group validates the *committed* shard and probe artifacts (structure, size,
+and referential integrity) rather than rebuilding them, since CI has no catalog to rebuild from.
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ import numpy as np
 import pytest
 
 from cinegeist.catalog import db
+from cinegeist.convo.probes import phrase_pair
 from cinegeist.webshard import build
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -200,6 +201,31 @@ def test_build_shard_rejects_an_empty_catalog() -> None:
         build.build_shard(conn, np.zeros((0, 8), dtype=np.float32))
 
 
+# -- precomputed probes --------------------------------------------------------------
+
+
+def test_build_probes_grounds_real_pairs_ordered_by_spread() -> None:
+    conn, matrix = _synthetic_catalog()
+    result = build.build_probes(conn, matrix, target=10, n_axes=5)
+
+    assert result["question_template"] == build.PROBE_QUESTION_TEMPLATE
+    probes = result["probes"]
+    assert 0 < len(probes) <= 5
+    spreads = [p["spread"] for p in probes]
+    assert spreads == sorted(spreads, reverse=True)  # most discriminative first
+    for p in probes:
+        assert p["high"]["id"] != p["low"]["id"]  # a real contrast, not a film against itself
+        assert p["question"] == phrase_pair(p["high"]["title"], p["low"]["title"])
+
+
+def test_build_probes_is_deterministic() -> None:
+    conn, matrix = _synthetic_catalog()
+    a = build.build_probes(conn, matrix, target=10, n_axes=5)["probes"]
+    conn2, matrix2 = _synthetic_catalog()
+    b = build.build_probes(conn2, matrix2, target=10, n_axes=5)["probes"]
+    assert [p["axis"] for p in a] == [p["axis"] for p in b]
+
+
 # -- the committed artifact ----------------------------------------------------------
 
 
@@ -234,3 +260,24 @@ def test_committed_shard_is_well_formed_and_within_budget() -> None:
         gzip.compress((SHARD_DIR / "shard.json").read_bytes(), 9)
     )
     assert gz < 400 * 1024, f"shard is {gz / 1024:.0f} KB gzipped, over the 400 KB budget"
+
+
+@pytest.mark.skipif(
+    not (SHARD_DIR / "probes.json").exists(), reason="run `make web-shard` to build the shard"
+)
+def test_committed_probes_are_well_formed_and_reference_shard_films() -> None:
+    probes_doc = json.loads((SHARD_DIR / "probes.json").read_text(encoding="utf-8"))
+    manifest = json.loads((SHARD_DIR / "shard.json").read_text(encoding="utf-8"))
+    shard_ids = {f["id"] for f in manifest["films"]}
+
+    probes = probes_doc["probes"]
+    assert probes and len(probes) <= build.PROBE_AXES
+    assert probes_doc["question_template"] == build.PROBE_QUESTION_TEMPLATE
+    seen_axes = set()
+    for p in probes:
+        assert p["axis"] not in seen_axes, "each axis appears at most once"
+        seen_axes.add(p["axis"])
+        assert p["high"]["id"] != p["low"]["id"]
+        # Every probe film is in the shard, so the demo can look it up (referential integrity).
+        assert p["high"]["id"] in shard_ids and p["low"]["id"] in shard_ids
+        assert p["question"] == phrase_pair(p["high"]["title"], p["low"]["title"])
