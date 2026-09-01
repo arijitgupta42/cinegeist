@@ -19,7 +19,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from cinegeist.catalog import db, genome  # noqa: E402
 from cinegeist.config import data_dir  # noqa: E402
-from cinegeist.webshard.build import build_shard  # noqa: E402
+from cinegeist.webshard.build import build_probes, build_shard  # noqa: E402
 
 OUT_DIR = ROOT / "web" / "public" / "shard"
 SIZE_BUDGET_KB = 400
@@ -42,25 +42,32 @@ def main() -> None:
     print(f"catalog: {matrix.shape[0]} genome films x {matrix.shape[1]} tags")
 
     build = build_shard(conn, matrix)
+    probes = build_probes(conn, matrix)
     conn.close()
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    # Compact on purpose: this is a generated artifact the demo parses, not a file anyone hand-edits
-    # or reads a git diff of line by line. Compact keeps it small and signals "regenerate, don't
+    # Compact on purpose: these are generated artifacts the demo parses, not files anyone hand-edits
+    # or reads a git diff of line by line. Compact keeps them small and signals "regenerate, don't
     # edit". ensure_ascii=False stores UTF-8 directly (smaller than \uXXXX for accented titles).
     manifest_json = json.dumps(build.manifest, ensure_ascii=False, separators=(",", ":")) + "\n"
+    probes_json = json.dumps(probes, ensure_ascii=False, separators=(",", ":")) + "\n"
     _write_lf(OUT_DIR / "shard.json", manifest_json)
     (OUT_DIR / "shard.bin").write_bytes(build.binary)
+    _write_lf(OUT_DIR / "probes.json", probes_json)
 
     json_bytes = manifest_json.encode("utf-8")
-    gz = len(gzip.compress(build.binary, 9)) + len(gzip.compress(json_bytes, 9))
+    probes_bytes = probes_json.encode("utf-8")
+    shard_gz = len(gzip.compress(build.binary, 9)) + len(gzip.compress(json_bytes, 9))
+    probes_gz = len(gzip.compress(probes_bytes, 9))
     print(f"films: {build.manifest['n_films']}  components: {build.manifest['n_components']}")
-    print(f"shard.bin  {len(build.binary) / 1024:7.1f} KB")
-    print(f"shard.json {len(json_bytes) / 1024:7.1f} KB")
-    print(f"gzipped total {gz / 1024:.1f} KB (budget {SIZE_BUDGET_KB} KB)")
-    if gz / 1024 > SIZE_BUDGET_KB:
+    print(f"shard.bin   {len(build.binary) / 1024:7.1f} KB")
+    print(f"shard.json  {len(json_bytes) / 1024:7.1f} KB")
+    print(f"probes.json {len(probes_bytes) / 1024:7.1f} KB  ({len(probes['probes'])} probes)")
+    print(f"gzipped: shard {shard_gz / 1024:.1f} KB (budget {SIZE_BUDGET_KB}) + probes "
+          f"{probes_gz / 1024:.1f} KB")
+    if shard_gz / 1024 > SIZE_BUDGET_KB:
         raise SystemExit(f"shard is over the {SIZE_BUDGET_KB} KB gzipped budget")
-    print(f"wrote {OUT_DIR.relative_to(ROOT)}/shard.json + shard.bin")
+    print(f"wrote {OUT_DIR.relative_to(ROOT)}/shard.json + shard.bin + probes.json")
 
 
 if __name__ == "__main__":

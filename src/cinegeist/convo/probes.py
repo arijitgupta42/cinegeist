@@ -39,6 +39,11 @@ MIN_TURNS = 2  # don't declare victory after a single answer (the user's stop al
 STABLE_TURNS = 2  # stop once the top-5 is identical across this many most-recent turns
 MARGIN_THRESHOLD = 0.15  # rank-1 minus rank-10 score gap that means "confident enough"
 
+# The deterministic phrasing of a this-or-that probe, used in offline mode and baked into the demo's
+# probes.json (the browser has no LLM to phrase). Online, the LLM rephrases it. Kept in one place so
+# the CLI and the precomputed demo questions read identically.
+PROBE_QUESTION_TEMPLATE = "Which would you rather put on tonight — {high} or {low}?"
+
 # Phrases that mean "stop quizzing me and show me something" — the escape hatch, honoured always.
 _STOP_PATTERNS = (
     "just show me",
@@ -129,11 +134,20 @@ def _tag_names(conn: sqlite3.Connection) -> dict[int, str]:
     }
 
 
-def _ground_pair(contested: np.ndarray, position: int) -> tuple[int, int] | None:
+def phrase_pair(high_title: str, low_title: str) -> str:
+    """The deterministic question for a probe pair (:data:`PROBE_QUESTION_TEMPLATE`, filled in).
+
+    Not ``str.format`` on the titles, so a stray brace in a film title can't break the phrasing.
+    """
+    return f"Which would you rather put on tonight — {high_title} or {low_title}?"
+
+
+def ground_pair(contested: np.ndarray, position: int) -> tuple[int, int] | None:
     """Pick (high-pole index, low-pole index) within the contested set for one axis.
 
     The high pole is the film most strongly on the axis; the low pole is the film weakly on it
-    that is otherwise closest to the high pole, so the two differ mainly on this axis.
+    that is otherwise closest to the high pole, so the two differ mainly on this axis. Shared with
+    the demo shard builder, which grounds the same pairs offline (plan.md §8.2).
     """
     relevance = contested[:, position]
     high = int(np.argmax(relevance))
@@ -188,7 +202,7 @@ def choose_probe(
     if float(spread[position]) < _MIN_SPREAD:
         return None  # nothing divides the contenders any more
 
-    grounded = _ground_pair(contested, position)
+    grounded = ground_pair(contested, position)
     if grounded is None:
         return None
     high_local, low_local = grounded
@@ -204,7 +218,7 @@ def choose_probe(
         spread=float(spread[position]),
         film_high=film_high,
         film_low=film_low,
-        question=f"Which would you rather put on tonight — {film_high.title} or {film_low.title}?",
+        question=phrase_pair(film_high.title, film_low.title),
     )
 
 

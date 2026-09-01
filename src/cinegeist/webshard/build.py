@@ -30,6 +30,8 @@ from datetime import UTC, datetime
 
 import numpy as np
 
+from ..convo.probes import _MIN_SPREAD as _PROBE_MIN_SPREAD
+from ..convo.probes import PROBE_QUESTION_TEMPLATE, ground_pair, phrase_pair
 from ..recommend.coverage import COVERAGE_SIMILARITY
 
 SHARD_VERSION = 1
@@ -37,6 +39,11 @@ TARGET_FILMS = 2000
 SVD_COMPONENTS = 96
 TOP_TAGS_PER_FILM = 12
 _SAMPLE_SEED = 7
+
+# How many axes to precompute questions for, highest shard variance first. The demo picks the axis
+# to ask by information gain (§5.2); precomputing the most-discriminative axes covers the cold start
+# and the great majority of adaptive picks without an LLM. (plan.md §8.2)
+PROBE_AXES = 300
 
 # Fills an unused top-tag slot for a film with fewer than TOP_TAGS_PER_FILM non-zero tags. No real
 # genome position reaches it (there are ~1,128 tags), so the demo reads slots until it hits this.
@@ -350,3 +357,64 @@ def build_shard(
         "films": film_entries,
     }
     return ShardBuild(manifest=manifest, binary=binary)
+
+
+# -- precomputed probes (the demo's questions, plan.md §8.2) --------------------------
+
+
+def build_probes(
+    conn: sqlite3.Connection,
+    matrix: np.ndarray,
+    *,
+    target: int = TARGET_FILMS,
+    seed: int = _SAMPLE_SEED,
+    n_axes: int = PROBE_AXES,
+) -> dict:
+    """Precompute this-or-that probe pairs and phrasings for the browser demo (plan.md §8.2).
+
+    The demo has no LLM to phrase questions, so they are baked offline: for the highest-variance
+    axes across the *same* shard sample, ground a real film pair with the exact algorithm the CLI
+    uses (:func:`cinegeist.convo.probes.ground_pair`) and phrase it with the shared template, so a
+    demo question reads identically to the CLI's offline one. The demo still *chooses* which of
+    these to ask by information gain at runtime; this only supplies the wording it can't generate.
+
+    Selection is by variance alone and never sees coverage — the demo must not be steered toward
+    the shard's dense regions (hard rule 9, §8.4). Axes are ordered most-discriminative first, with
+    a stable tie-break so the file is byte-reproducible.
+    """
+    films = _load_films(conn)
+    if not films:
+        raise ValueError("no genome-covered films in the catalog")
+    names = _tag_names(conn)
+    years = np.array([f.year or 0 for f in films])
+    popularity = np.array([f.popularity for f in films])
+    chosen = [films[i] for i in stratified_sample(years, popularity, target, seed=seed)]
+    sub = np.asarray(matrix[[f.genome_row for f in chosen]], dtype=np.float32)
+
+    variance = sub.var(axis=0)
+    probes: list[dict] = []
+    for pos in np.argsort(-variance, kind="stable"):
+        if len(probes) >= n_axes or float(variance[pos]) < _PROBE_MIN_SPREAD:
+            break  # sorted descending, so nothing groundable-and-discriminating remains
+        grounded = ground_pair(sub, int(pos))
+        if grounded is None:
+            continue
+        high, low = (chosen[i] for i in grounded)
+        probes.append(
+            {
+                "axis": int(pos),
+                "name": names.get(int(pos), f"tag#{pos}"),
+                "spread": float(variance[pos]),
+                "high": {"id": high.movie_id, "title": high.title, "year": high.year},
+                "low": {"id": low.movie_id, "title": low.title, "year": low.year},
+                "question": phrase_pair(high.title, low.title),
+            }
+        )
+    return {
+        "version": SHARD_VERSION,
+        "generated_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "seed": seed,
+        "n_films": len(chosen),
+        "question_template": PROBE_QUESTION_TEMPLATE,
+        "probes": probes,
+    }
