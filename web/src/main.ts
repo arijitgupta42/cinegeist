@@ -1,9 +1,11 @@
-// The demo's entry point. It renders the page chrome, then loads the shard and reports what it
-// holds; the click-based conversation, scoring, and honesty path arrive in later PRs. Everything
-// happens in the browser — the only network traffic is the shard fetched here and, later, posters.
+// The demo's entry point. It renders the page chrome, loads the shard and the precomputed
+// questions, then hands the stage to the click-based conversation. Everything happens in the
+// browser — the only network traffic is the shard and probes fetched here, and posters that
+// lazy-load from TMDB's CDN once picks are shown (plan.md §8.1, §8.5).
 
 import "./style.css";
-import { loadShard, type DecodedShard } from "./shard.ts";
+import { clearShardCache, loadProbes, loadShard, type DecodedShard, type ProbesFile } from "./shard.ts";
+import { Conversation } from "./conversation.ts";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 
@@ -30,7 +32,7 @@ function renderChrome(): void {
           <a class="nav-link" href="#privacy"><span class="sq magenta"></span><span class="mono">Privacy</span></a>
           <a class="nav-link" href="#full"><span class="sq orange"></span><span class="mono">Full version</span></a>
         </div>
-        <a class="btn btn-accent" href="#stage" data-start><span class="mono">Start the demo</span>${chevron}</a>
+        <button class="btn btn-accent" data-start><span class="mono">Start the demo</span>${chevron}</button>
       </div>
     </nav>
 
@@ -40,7 +42,7 @@ function renderChrome(): void {
       About eight clicks in, it knows more about your taste than a genre filter ever will — and it
       shows you exactly what it learned, and why.</p>
       <div class="cta">
-        <a class="btn btn-accent" href="#stage" data-start><span class="mono">Start the demo</span>${chevron}</a>
+        <button class="btn btn-accent" data-start><span class="mono">Start the demo</span>${chevron}</button>
         <a class="btn" href="#how"><span class="mono">How it works</span>${chevron}</a>
       </div>
     </header>
@@ -69,16 +71,10 @@ function renderChrome(): void {
       <p class="credit">
         Visual design inspired by
         <a href="https://www.plasticity.xyz/" target="_blank" rel="noopener noreferrer">plasticity.xyz</a>.
+        <button class="link" data-clear><span class="mono">Clear everything</span></button>
       </p>
     </footer>
   `;
-
-  app.querySelectorAll<HTMLElement>("[data-start]").forEach((el) =>
-    el.addEventListener("click", (e) => {
-      e.preventDefault();
-      document.querySelector("#stage")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }),
-  );
 }
 
 function panel(): HTMLElement {
@@ -91,7 +87,7 @@ function showLoading(): void {
     <div class="loading"><span class="dot"></span> Loading the taste catalog…</div>`;
 }
 
-function showLoaded(shard: DecodedShard): void {
+function showIntro(shard: DecodedShard, onBegin: () => void): void {
   const decades = new Set(
     shard.films.map((f) => (f.year ? Math.floor(f.year / 10) * 10 : null)).filter((d) => d !== null),
   );
@@ -105,8 +101,10 @@ function showLoaded(shard: DecodedShard): void {
       <div class="stat"><div class="num">${shard.fullCatalogSize.toLocaleString()}</div>
         <div class="cap"><span class="sq orange"></span><span class="mono">In the full version</span></div></div>
     </div>
-    <p class="note">The pick-by-pick conversation lands in the next update — this is the catalog it
-    will search, loaded from a ${(shard.nFilms).toLocaleString()}-film shard cached in your browser.</p>`;
+    <p class="note">Answer a handful of this-or-that pairs and CineGeist will find something to watch —
+    then show you why. No question ever repeats a film you've already judged.</p>
+    <div class="controls"><button class="btn btn-accent" data-begin><span class="mono">Begin</span>${chevron}</button></div>`;
+  panel().querySelector("[data-begin]")?.addEventListener("click", onBegin);
 }
 
 function showError(err: unknown): void {
@@ -115,14 +113,47 @@ function showError(err: unknown): void {
     <p class="note">${String(err)}</p>`;
 }
 
+function scrollToStage(): void {
+  document.querySelector("#stage")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 async function main(): Promise<void> {
   renderChrome();
+
+  app.querySelector("[data-clear]")?.addEventListener("click", async () => {
+    try {
+      sessionStorage.clear();
+    } catch {
+      // ignore
+    }
+    await clearShardCache();
+    location.reload();
+  });
+
   showLoading();
+  let shard: DecodedShard;
+  let probes: ProbesFile;
   try {
-    showLoaded(await loadShard(import.meta.env.BASE_URL));
+    [shard, probes] = await Promise.all([loadShard(import.meta.env.BASE_URL), loadProbes(import.meta.env.BASE_URL)]);
   } catch (err) {
     showError(err);
+    return;
   }
+
+  const conversation = new Conversation(panel(), shard, probes);
+  const begin = (): void => {
+    conversation.start();
+    scrollToStage();
+  };
+
+  app.querySelectorAll<HTMLElement>("[data-start]").forEach((el) =>
+    el.addEventListener("click", (e) => {
+      e.preventDefault();
+      begin();
+    }),
+  );
+
+  showIntro(shard, begin);
 }
 
 void main();
