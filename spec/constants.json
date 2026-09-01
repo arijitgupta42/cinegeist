@@ -1,0 +1,37 @@
+{
+  "scoring": {
+    "W_COSINE": 0.55,
+    "W_FACET": 0.2,
+    "W_QUALITY": 0.1,
+    "W_SESSION": 0.1,
+    "W_POPULARITY": 0.05,
+    "QUALITY_PRIOR_MEAN": 6.2,
+    "QUALITY_PRIOR_COUNT": 25.0,
+    "RATING_SCALE": 10.0,
+    "POPULARITY_REFERENCE": 50.0,
+    "PREDICTED_CONFIDENCE": 0.85,
+    "MMR_LAMBDA": 0.7,
+    "WILDCARD_MAX_COSINE": 0.35,
+    "WILDCARD_TAG_RELEVANCE": 0.5,
+    "WILDCARD_MIN_SHARED_TAGS": 2
+  },
+  "decay": {
+    "HALF_LIFE_DAYS": 270.0,
+    "AXES_PER_SIGN": 15,
+    "AXIS_EPSILON": 1e-06
+  },
+  "probes": {
+    "POOL_TOP": 200,
+    "MIN_SPREAD": 0.0001,
+    "MAX_TURNS": 9,
+    "MIN_TURNS": 2,
+    "STABLE_TURNS": 2,
+    "MARGIN_THRESHOLD": 0.15
+  },
+  "coverage": {
+    "COVERAGE_SIMILARITY": 0.85,
+    "COVERAGE_TOP_K": 25,
+    "REGION_COVERAGE_MIN": 0.25,
+    "NEAREST_COSINE_MIN": 0.45
+  }
+}

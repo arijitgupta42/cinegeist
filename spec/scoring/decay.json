@@ -1,0 +1,482 @@
+{
+  "cases": [
+    {
+      "name": "one like at exactly one half-life halves the evidence weight",
+      "n_tags": 3,
+      "tags": [
+        {
+          "tag_id": 1,
+          "position": 0,
+          "name": "warm"
+        },
+        {
+          "tag_id": 2,
+          "position": 1,
+          "name": "bleak"
+        },
+        {
+          "tag_id": 3,
+          "position": 2,
+          "name": "space"
+        }
+      ],
+      "half_life_days": 270.0,
+      "movies": [
+        {
+          "movie_id": 1,
+          "genome_row": 0,
+          "clean_title": "Toy Story",
+          "vector": [
+            0.9,
+            0.1,
+            0.2
+          ]
+        }
+      ],
+      "events": [
+        {
+          "kind": "liked_movie",
+          "subject_kind": "movie",
+          "subject": 1,
+          "value": 1.0,
+          "weight": 1.0,
+          "age_days": 270.0,
+          "evidence": "loved it as a kid"
+        }
+      ],
+      "expected": {
+        "centroid": [
+          0.8999999761581421,
+          0.10000000149011612,
+          0.20000000298023224
+        ],
+        "total_weight": 0.5,
+        "axes": [
+          {
+            "position": 0,
+            "name": "warm",
+            "weight": 0.8999999761581421,
+            "source": "Toy Story",
+            "evidence": "loved it as a kid"
+          },
+          {
+            "position": 2,
+            "name": "space",
+            "weight": 0.20000000298023224,
+            "source": "Toy Story",
+            "evidence": "loved it as a kid"
+          },
+          {
+            "position": 1,
+            "name": "bleak",
+            "weight": 0.10000000149011612,
+            "source": "Toy Story",
+            "evidence": "loved it as a kid"
+          }
+        ]
+      }
+    },
+    {
+      "name": "two fresh likes average into the centroid",
+      "n_tags": 3,
+      "tags": [
+        {
+          "tag_id": 1,
+          "position": 0,
+          "name": "warm"
+        },
+        {
+          "tag_id": 2,
+          "position": 1,
+          "name": "bleak"
+        },
+        {
+          "tag_id": 3,
+          "position": 2,
+          "name": "space"
+        }
+      ],
+      "movies": [
+        {
+          "movie_id": 1,
+          "genome_row": 0,
+          "clean_title": "A",
+          "vector": [
+            0.9,
+            0.1,
+            0.2
+          ]
+        },
+        {
+          "movie_id": 2,
+          "genome_row": 1,
+          "clean_title": "B",
+          "vector": [
+            0.3,
+            0.7,
+            0.4
+          ]
+        }
+      ],
+      "events": [
+        {
+          "kind": "liked_movie",
+          "subject_kind": "movie",
+          "subject": 1,
+          "value": 1.0,
+          "weight": 1.0,
+          "age_days": 0.0,
+          "evidence": "a"
+        },
+        {
+          "kind": "liked_movie",
+          "subject_kind": "movie",
+          "subject": 2,
+          "value": 1.0,
+          "weight": 1.0,
+          "age_days": 0.0,
+          "evidence": "b"
+        }
+      ],
+      "expected": {
+        "centroid": [
+          0.6000000238418579,
+          0.4000000059604645,
+          0.30000001192092896
+        ],
+        "total_weight": 2.0,
+        "axes": [
+          {
+            "position": 0,
+            "name": "warm",
+            "weight": 0.6000000238418579,
+            "source": "A",
+            "evidence": "a"
+          },
+          {
+            "position": 1,
+            "name": "bleak",
+            "weight": 0.4000000059604645,
+            "source": "B",
+            "evidence": "b"
+          },
+          {
+            "position": 2,
+            "name": "space",
+            "weight": 0.30000001192092896,
+            "source": "B",
+            "evidence": "b"
+          }
+        ]
+      }
+    },
+    {
+      "name": "a dislike pushes away from a film's vector",
+      "n_tags": 3,
+      "tags": [
+        {
+          "tag_id": 1,
+          "position": 0,
+          "name": "warm"
+        },
+        {
+          "tag_id": 2,
+          "position": 1,
+          "name": "bleak"
+        },
+        {
+          "tag_id": 3,
+          "position": 2,
+          "name": "space"
+        }
+      ],
+      "movies": [
+        {
+          "movie_id": 1,
+          "genome_row": 0,
+          "clean_title": "A",
+          "vector": [
+            1.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "movie_id": 2,
+          "genome_row": 1,
+          "clean_title": "B",
+          "vector": [
+            0.0,
+            1.0,
+            0.0
+          ]
+        }
+      ],
+      "events": [
+        {
+          "kind": "liked_movie",
+          "subject_kind": "movie",
+          "subject": 1,
+          "value": 1.0,
+          "weight": 1.0,
+          "age_days": 0.0,
+          "evidence": "loved A"
+        },
+        {
+          "kind": "disliked_movie",
+          "subject_kind": "movie",
+          "subject": 2,
+          "value": -1.0,
+          "weight": 1.0,
+          "age_days": 0.0,
+          "evidence": "hated B"
+        }
+      ],
+      "expected": {
+        "centroid": [
+          0.5,
+          -0.5,
+          0.0
+        ],
+        "total_weight": 2.0,
+        "axes": [
+          {
+            "position": 0,
+            "name": "warm",
+            "weight": 0.5,
+            "source": "A",
+            "evidence": "loved A"
+          },
+          {
+            "position": 1,
+            "name": "bleak",
+            "weight": -0.5,
+            "source": "B",
+            "evidence": "hated B"
+          }
+        ]
+      }
+    },
+    {
+      "name": "an axis answer pulls toward a single tag",
+      "n_tags": 3,
+      "tags": [
+        {
+          "tag_id": 1,
+          "position": 0,
+          "name": "warm"
+        },
+        {
+          "tag_id": 2,
+          "position": 1,
+          "name": "bleak"
+        },
+        {
+          "tag_id": 3,
+          "position": 2,
+          "name": "space"
+        }
+      ],
+      "movies": [],
+      "events": [
+        {
+          "kind": "axis_answer",
+          "subject_kind": "tag",
+          "subject": 2,
+          "value": 0.8,
+          "weight": 1.0,
+          "age_days": 0.0,
+          "evidence": "I like it bleak"
+        }
+      ],
+      "expected": {
+        "centroid": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "total_weight": 0.8,
+        "axes": [
+          {
+            "position": 1,
+            "name": "bleak",
+            "weight": 1.0,
+            "source": "'bleak'",
+            "evidence": "I like it bleak"
+          }
+        ]
+      }
+    },
+    {
+      "name": "decay shrinks evidence weight but not the centroid direction",
+      "n_tags": 3,
+      "tags": [
+        {
+          "tag_id": 1,
+          "position": 0,
+          "name": "warm"
+        },
+        {
+          "tag_id": 2,
+          "position": 1,
+          "name": "bleak"
+        },
+        {
+          "tag_id": 3,
+          "position": 2,
+          "name": "space"
+        }
+      ],
+      "movies": [
+        {
+          "movie_id": 1,
+          "genome_row": 0,
+          "clean_title": "A",
+          "vector": [
+            0.6,
+            0.8,
+            0.0
+          ]
+        }
+      ],
+      "events": [
+        {
+          "kind": "liked_movie",
+          "subject_kind": "movie",
+          "subject": 1,
+          "value": 1.0,
+          "weight": 1.0,
+          "age_days": 0.0,
+          "evidence": "recent"
+        },
+        {
+          "kind": "liked_movie",
+          "subject_kind": "movie",
+          "subject": 1,
+          "value": 1.0,
+          "weight": 1.0,
+          "age_days": 270.0,
+          "evidence": "long ago"
+        }
+      ],
+      "expected": {
+        "centroid": [
+          0.6000000238418579,
+          0.800000011920929,
+          0.0
+        ],
+        "total_weight": 1.5,
+        "axes": [
+          {
+            "position": 1,
+            "name": "bleak",
+            "weight": 0.800000011920929,
+            "source": "A",
+            "evidence": "recent"
+          },
+          {
+            "position": 0,
+            "name": "warm",
+            "weight": 0.6000000238418579,
+            "source": "A",
+            "evidence": "recent"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ranked axes attribute each affinity to its strongest evidence",
+      "n_tags": 3,
+      "tags": [
+        {
+          "tag_id": 1,
+          "position": 0,
+          "name": "warm"
+        },
+        {
+          "tag_id": 2,
+          "position": 1,
+          "name": "bleak"
+        },
+        {
+          "tag_id": 3,
+          "position": 2,
+          "name": "space"
+        }
+      ],
+      "movies": [
+        {
+          "movie_id": 1,
+          "genome_row": 0,
+          "clean_title": "Spirited Away",
+          "vector": [
+            0.9,
+            0.1,
+            0.2
+          ]
+        },
+        {
+          "movie_id": 2,
+          "genome_row": 1,
+          "clean_title": "Solaris",
+          "vector": [
+            0.1,
+            0.8,
+            0.6
+          ]
+        }
+      ],
+      "events": [
+        {
+          "kind": "liked_movie",
+          "subject_kind": "movie",
+          "subject": 1,
+          "value": 1.0,
+          "weight": 1.0,
+          "age_days": 0.0,
+          "evidence": "the animation was gorgeous"
+        },
+        {
+          "kind": "disliked_movie",
+          "subject_kind": "movie",
+          "subject": 2,
+          "value": -1.0,
+          "weight": 1.0,
+          "age_days": 0.0,
+          "evidence": "too cold and cerebral"
+        }
+      ],
+      "expected": {
+        "centroid": [
+          0.3999999761581421,
+          -0.3499999940395355,
+          -0.20000001788139343
+        ],
+        "total_weight": 2.0,
+        "axes": [
+          {
+            "position": 0,
+            "name": "warm",
+            "weight": 0.3999999761581421,
+            "source": "Spirited Away",
+            "evidence": "the animation was gorgeous"
+          },
+          {
+            "position": 2,
+            "name": "space",
+            "weight": -0.20000001788139343,
+            "source": "Solaris",
+            "evidence": "too cold and cerebral"
+          },
+          {
+            "position": 1,
+            "name": "bleak",
+            "weight": -0.3499999940395355,
+            "source": "Solaris",
+            "evidence": "too cold and cerebral"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,174 @@
+{
+  "region": [
+    {
+      "name": "a well-covered neighbourhood",
+      "centroid": [
+        1.0,
+        0.0
+      ],
+      "vectors": [
+        [
+          1.0,
+          0.0
+        ],
+        [
+          0.96,
+          0.28
+        ],
+        [
+          0.0,
+          1.0
+        ]
+      ],
+      "coverage": [
+        1.0,
+        0.8,
+        0.2
+      ],
+      "top_k": 2,
+      "expected": {
+        "region_coverage": 0.9020407900121107,
+        "nearest_cosine": 1.0
+      }
+    },
+    {
+      "name": "a thin neighbourhood the shard barely kept",
+      "centroid": [
+        1.0,
+        0.0
+      ],
+      "vectors": [
+        [
+          1.0,
+          0.0
+        ],
+        [
+          0.96,
+          0.28
+        ]
+      ],
+      "coverage": [
+        0.2,
+        0.1
+      ],
+      "expected": {
+        "region_coverage": 0.15102040412921508,
+        "nearest_cosine": 1.0
+      }
+    },
+    {
+      "name": "top_k above the pool size is clamped",
+      "centroid": [
+        0.0,
+        1.0
+      ],
+      "vectors": [
+        [
+          0.0,
+          1.0
+        ],
+        [
+          0.28,
+          0.96
+        ]
+      ],
+      "coverage": [
+        0.5,
+        0.5
+      ],
+      "top_k": 25,
+      "expected": {
+        "region_coverage": 0.4999999847947338,
+        "nearest_cosine": 1.0
+      }
+    },
+    {
+      "name": "nothing points toward the centroid",
+      "centroid": [
+        1.0,
+        0.0
+      ],
+      "vectors": [
+        [
+          -1.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0
+        ]
+      ],
+      "coverage": [
+        0.9,
+        0.9
+      ],
+      "expected": {
+        "region_coverage": 0.0,
+        "nearest_cosine": 0.0
+      }
+    }
+  ],
+  "verdict": [
+    {
+      "name": "served well",
+      "region_coverage": 0.9,
+      "nearest_cosine": 0.9,
+      "expected": {
+        "honest": false,
+        "reasons": []
+      }
+    },
+    {
+      "name": "thin region only",
+      "region_coverage": 0.2,
+      "nearest_cosine": 0.9,
+      "expected": {
+        "honest": true,
+        "reasons": [
+          "region_coverage_below_min"
+        ]
+      }
+    },
+    {
+      "name": "no close neighbour only",
+      "region_coverage": 0.9,
+      "nearest_cosine": 0.4,
+      "expected": {
+        "honest": true,
+        "reasons": [
+          "no_close_neighbour"
+        ]
+      }
+    },
+    {
+      "name": "both triggers fire",
+      "region_coverage": 0.1,
+      "nearest_cosine": 0.3,
+      "expected": {
+        "honest": true,
+        "reasons": [
+          "region_coverage_below_min",
+          "no_close_neighbour"
+        ]
+      }
+    },
+    {
+      "name": "region coverage exactly at the threshold stays served",
+      "region_coverage": 0.25,
+      "nearest_cosine": 0.9,
+      "expected": {
+        "honest": false,
+        "reasons": []
+      }
+    },
+    {
+      "name": "nearest cosine exactly at the threshold stays served",
+      "region_coverage": 0.9,
+      "nearest_cosine": 0.45,
+      "expected": {
+        "honest": false,
+        "reasons": []
+      }
+    }
+  ]
+}

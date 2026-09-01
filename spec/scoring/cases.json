@@ -1,0 +1,465 @@
+{
+  "cases": [
+    {
+      "name": "profile axis and the quality prior",
+      "n_tags": 2,
+      "profile": [
+        1.0,
+        0.0
+      ],
+      "films": [
+        {
+          "movie_id": 1,
+          "vector": [
+            1.0,
+            0.0
+          ]
+        },
+        {
+          "movie_id": 2,
+          "vector": [
+            0.0,
+            1.0
+          ]
+        }
+      ],
+      "expected": {
+        "scored": [
+          {
+            "movie_id": 1,
+            "score": 0.6120000000000001,
+            "cosine": 1.0,
+            "quality": 0.62,
+            "session_fit": 0.0,
+            "facet_match": 0.0,
+            "popularity_penalty": 0.0,
+            "confidence": 1.0
+          },
+          {
+            "movie_id": 2,
+            "score": 0.062,
+            "cosine": 0.0,
+            "quality": 0.62,
+            "session_fit": 0.0,
+            "facet_match": 0.0,
+            "popularity_penalty": 0.0,
+            "confidence": 1.0
+          }
+        ],
+        "shortlist_ids": [
+          1,
+          2
+        ],
+        "picks_ids": [
+          1,
+          2
+        ],
+        "wildcard_id": null
+      }
+    },
+    {
+      "name": "quality lifts and popularity penalises an off-taste film",
+      "n_tags": 2,
+      "profile": [
+        1.0,
+        0.0
+      ],
+      "films": [
+        {
+          "movie_id": 1,
+          "vector": [
+            0.0,
+            1.0
+          ],
+          "vote_average": 8.0,
+          "vote_count": 10000,
+          "popularity": 50.0
+        }
+      ],
+      "expected": {
+        "scored": [
+          {
+            "movie_id": 1,
+            "score": 0.02995511221945138,
+            "cosine": 0.0,
+            "quality": 0.7995511221945137,
+            "session_fit": 0.0,
+            "facet_match": 0.0,
+            "popularity_penalty": 1.0,
+            "confidence": 1.0
+          }
+        ],
+        "shortlist_ids": [
+          1
+        ],
+        "picks_ids": [
+          1
+        ],
+        "wildcard_id": null
+      }
+    },
+    {
+      "name": "session intent adds a fit term for tonight",
+      "n_tags": 2,
+      "profile": [
+        1.0,
+        0.0
+      ],
+      "session": [
+        0.0,
+        1.0
+      ],
+      "films": [
+        {
+          "movie_id": 1,
+          "vector": [
+            0.0,
+            1.0
+          ]
+        }
+      ],
+      "expected": {
+        "scored": [
+          {
+            "movie_id": 1,
+            "score": 0.162,
+            "cosine": 0.0,
+            "quality": 0.62,
+            "session_fit": 1.0,
+            "facet_match": 0.0,
+            "popularity_penalty": 0.0,
+            "confidence": 1.0
+          }
+        ],
+        "shortlist_ids": [
+          1
+        ],
+        "picks_ids": [
+          1
+        ],
+        "wildcard_id": null
+      }
+    },
+    {
+      "name": "a predicted vector is discounted",
+      "n_tags": 2,
+      "profile": [
+        1.0,
+        0.0
+      ],
+      "films": [
+        {
+          "movie_id": 1,
+          "vector": [
+            1.0,
+            0.0
+          ],
+          "genome_source": "measured"
+        },
+        {
+          "movie_id": 2,
+          "vector": [
+            1.0,
+            0.0
+          ],
+          "genome_source": "predicted"
+        }
+      ],
+      "expected": {
+        "scored": [
+          {
+            "movie_id": 1,
+            "score": 0.6120000000000001,
+            "cosine": 1.0,
+            "quality": 0.62,
+            "session_fit": 0.0,
+            "facet_match": 0.0,
+            "popularity_penalty": 0.0,
+            "confidence": 1.0
+          },
+          {
+            "movie_id": 2,
+            "score": 0.5202000000000001,
+            "cosine": 1.0,
+            "quality": 0.62,
+            "session_fit": 0.0,
+            "facet_match": 0.0,
+            "popularity_penalty": 0.0,
+            "confidence": 0.85
+          }
+        ],
+        "shortlist_ids": [
+          1,
+          2
+        ],
+        "picks_ids": [
+          1,
+          2
+        ],
+        "wildcard_id": null
+      }
+    },
+    {
+      "name": "mmr keeps a duplicate under pure relevance but drops it for diversity",
+      "n_tags": 2,
+      "profile": [
+        1.0,
+        0.0
+      ],
+      "lam": 0.3,
+      "n_confident": 2,
+      "with_wildcard": false,
+      "films": [
+        {
+          "movie_id": 1,
+          "vector": [
+            1.0,
+            0.0
+          ]
+        },
+        {
+          "movie_id": 2,
+          "vector": [
+            1.0,
+            0.0
+          ]
+        },
+        {
+          "movie_id": 3,
+          "vector": [
+            0.0,
+            1.0
+          ]
+        }
+      ],
+      "expected": {
+        "scored": [
+          {
+            "movie_id": 1,
+            "score": 0.6120000000000001,
+            "cosine": 1.0,
+            "quality": 0.62,
+            "session_fit": 0.0,
+            "facet_match": 0.0,
+            "popularity_penalty": 0.0,
+            "confidence": 1.0
+          },
+          {
+            "movie_id": 2,
+            "score": 0.6120000000000001,
+            "cosine": 1.0,
+            "quality": 0.62,
+            "session_fit": 0.0,
+            "facet_match": 0.0,
+            "popularity_penalty": 0.0,
+            "confidence": 1.0
+          },
+          {
+            "movie_id": 3,
+            "score": 0.062,
+            "cosine": 0.0,
+            "quality": 0.62,
+            "session_fit": 0.0,
+            "facet_match": 0.0,
+            "popularity_penalty": 0.0,
+            "confidence": 1.0
+          }
+        ],
+        "shortlist_ids": [
+          1,
+          3,
+          2
+        ],
+        "picks_ids": [
+          1,
+          3
+        ],
+        "wildcard_id": null
+      }
+    },
+    {
+      "name": "wildcard is far from taste yet shares two strong tags",
+      "n_tags": 8,
+      "profile": [
+        1.0,
+        1.0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "strong_tag_positions": [
+        0,
+        1
+      ],
+      "n_confident": 1,
+      "films": [
+        {
+          "movie_id": 10,
+          "vector": [
+            1.0,
+            1.0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "movie_id": 20,
+          "vector": [
+            0.6,
+            0.0,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "movie_id": 30,
+          "vector": [
+            0.6,
+            0.6,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        }
+      ],
+      "expected": {
+        "scored": [
+          {
+            "movie_id": 10,
+            "score": 0.6120000655651092,
+            "cosine": 1.0000001192092896,
+            "quality": 0.62,
+            "session_fit": 0.0,
+            "facet_match": 0.0,
+            "popularity_penalty": 0.0,
+            "confidence": 1.0
+          },
+          {
+            "movie_id": 20,
+            "score": 0.15452741634845735,
+            "cosine": 0.16823166608810425,
+            "quality": 0.62,
+            "session_fit": 0.0,
+            "facet_match": 0.0,
+            "popularity_penalty": 0.0,
+            "confidence": 1.0
+          },
+          {
+            "movie_id": 30,
+            "score": 0.24202975881099703,
+            "cosine": 0.32732683420181274,
+            "quality": 0.62,
+            "session_fit": 0.0,
+            "facet_match": 0.0,
+            "popularity_penalty": 0.0,
+            "confidence": 1.0
+          }
+        ],
+        "shortlist_ids": [
+          10,
+          30,
+          20
+        ],
+        "picks_ids": [
+          10
+        ],
+        "wildcard_id": 30
+      }
+    },
+    {
+      "name": "a facet match nudges an otherwise off-taste film",
+      "n_tags": 3,
+      "profile": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "facet_scores": [
+        0.0,
+        1.0
+      ],
+      "films": [
+        {
+          "movie_id": 1,
+          "vector": [
+            1.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "movie_id": 2,
+          "vector": [
+            0.0,
+            1.0,
+            0.0
+          ]
+        }
+      ],
+      "expected": {
+        "scored": [
+          {
+            "movie_id": 1,
+            "score": 0.6120000000000001,
+            "cosine": 1.0,
+            "quality": 0.62,
+            "session_fit": 0.0,
+            "facet_match": 0.0,
+            "popularity_penalty": 0.0,
+            "confidence": 1.0
+          },
+          {
+            "movie_id": 2,
+            "score": 0.262,
+            "cosine": 0.0,
+            "quality": 0.62,
+            "session_fit": 0.0,
+            "facet_match": 1.0,
+            "popularity_penalty": 0.0,
+            "confidence": 1.0
+          }
+        ],
+        "shortlist_ids": [
+          1,
+          2
+        ],
+        "picks_ids": [
+          1,
+          2
+        ],
+        "wildcard_id": null
+      }
+    },
+    {
+      "name": "an empty pool yields nothing",
+      "n_tags": 4,
+      "profile": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "films": [],
+      "expected": {
+        "scored": [],
+        "shortlist_ids": [],
+        "picks_ids": [],
+        "wildcard_id": null
+      }
+    }
+  ]
+}

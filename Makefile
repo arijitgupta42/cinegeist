@@ -10,7 +10,7 @@ else
 	BIN := $(VENV)/bin
 endif
 
-.PHONY: setup lint format test test-network check catalog catalog-refresh web-shard
+.PHONY: setup lint format test test-network check catalog catalog-refresh spec web-shard
 
 setup:  ## create the venv, install the package (with dev extras), install the git hook
 	$(PY) -m venv $(VENV)
@@ -34,6 +34,9 @@ test-network:  ## integration tests that reach real APIs
 	$(BIN)/pytest -m network
 
 check: lint test  ## run before every PR
+
+spec:  ## regenerate the shared spec/ fixtures from the Python reference (plan.md §8.6)
+	$(BIN)/python scripts/build_spec_fixtures.py
 
 catalog:  ## build data/cinegeist.db and data/genome.npy (downloads MovieLens; slow, resumable)
 	$(BIN)/cinegeist catalog build
