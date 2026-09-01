@@ -507,6 +507,27 @@ main {
   color: var(--magenta);
 }
 
+/* honesty path (plan.md §8.4) — stated plainly, tinted but not alarming */
+.honesty {
+  background: color-mix(in srgb, var(--yellow) 8%, var(--surface-2));
+  border: 1px solid color-mix(in srgb, var(--yellow) 35%, var(--line));
+  border-radius: var(--radius);
+  padding: 1rem 1.1rem;
+  margin-bottom: 1.25rem;
+}
+.honesty .panel-head {
+  margin-bottom: 0.5rem;
+}
+.honesty p {
+  margin: 0;
+  color: var(--ink-dim);
+  font-size: 0.9rem;
+}
+.honesty em {
+  color: var(--yellow);
+  font-style: normal;
+}
+
 /* -- footer ------------------------------------------------------------------------ */
 
 .foot {

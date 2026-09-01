@@ -6,6 +6,7 @@
 
 import { recommend, type Candidate, type Recommendations, type ScoredFilm } from "./score.ts";
 import { selectDemoProbe, shouldStop } from "./probes.ts";
+import { assess, REASON_NO_CLOSE_NEIGHBOUR, type CoverageVerdict } from "./coverage.ts";
 import { DemoSession } from "./session.ts";
 import {
   filmTopTags,
@@ -163,19 +164,30 @@ export class Conversation {
   private presentPicks(recs: Recommendations & { pool?: Pool }): void {
     const pool = recs.pool ?? this.buildPool();
     const picks = recs.picks;
-    const reason = (f: ScoredFilm) => this.reasonFor(f, pool);
 
+    // The honesty check runs against the whole shard and its coverage bytes, not the unseen pool —
+    // it measures the shard's coverage of this taste, regardless of what's been shown (§8.4). It
+    // never touches probe selection, so it can't have steered the conversation here.
+    const verdict = assess(this.session.centroid(), this.shard.vectors, this.shard.nComponents, this.shard.coverage);
+
+    const header = verdict.honest ? "The closest the demo catalog gets" : "Your picks";
+    const reason = (f: ScoredFilm) => (verdict.honest ? this.honestReason(f, pool) : this.reasonFor(f, pool));
     const pickCards = picks.map((f) => this.pickCard(f, pool, reason(f))).join("");
-    const wildcard = recs.wildcard
-      ? `<div class="pick-group">
-           <div class="panel-head"><span class="sq magenta"></span><span class="mono">Wildcard</span></div>
-           ${this.pickCard(recs.wildcard, pool, this.wildcardReason(recs.wildcard, pool), true)}
-         </div>`
-      : "";
+
+    // A deliberate exploration slot inside an already-sparse region is noise, so the honesty path
+    // suppresses the wildcard entirely (plan.md §8.4). Ranking is otherwise unchanged — no backfill.
+    const wildcard =
+      !verdict.honest && recs.wildcard
+        ? `<div class="pick-group">
+             <div class="panel-head"><span class="sq magenta"></span><span class="mono">Wildcard</span></div>
+             ${this.pickCard(recs.wildcard, pool, this.wildcardReason(recs.wildcard, pool), true)}
+           </div>`
+        : "";
 
     this.mount.innerHTML = `
-      <div class="panel-head"><span class="sq cyan"></span><span class="mono">Your picks</span>
+      <div class="panel-head"><span class="sq ${verdict.honest ? "orange" : "cyan"}"></span><span class="mono">${header}</span>
         <span class="mono progress">from ${this.session.turn} reaction${this.session.turn === 1 ? "" : "s"}</span></div>
+      ${verdict.honest ? this.honestyBanner(verdict) : ""}
       <div class="picks">${pickCards || `<p class="note">Not enough signal yet — react to a few pairs first.</p>`}</div>
       ${wildcard}
       <div class="controls">
@@ -185,6 +197,39 @@ export class Conversation {
 
     this.mount.querySelector("[data-restart]")?.addEventListener("click", () => this.restart());
     this.mount.querySelector("[data-export]")?.addEventListener("click", () => this.exportSession());
+  }
+
+  // The honesty path: state the numbers, name the thin direction, and show the nearest thing as
+  // such — never pad with popular titles (plan.md §8.4, hard rule 9).
+  private honestyBanner(verdict: CoverageVerdict): string {
+    const pct = Math.max(1, Math.round(verdict.regionCoverage * 100));
+    const leanNames = this.strongTagNames(2);
+    const lean = leanNames.length ? ` You're leaning ${joinTags(leanNames)}.` : "";
+    const noNeighbour = verdict.reasons.includes(REASON_NO_CLOSE_NEIGHBOUR)
+      ? " Nothing in the demo is especially close to it."
+      : "";
+    return `
+      <div class="honesty">
+        <div class="panel-head"><span class="sq yellow"></span><span class="mono">The demo catalog runs thin here</span></div>
+        <p>The demo catalog is ${this.shard.nFilms.toLocaleString()} films. Your taste is pointing somewhere it
+        covers thinly — about ${pct}% of this neighbourhood survived the sample, and the full version searches
+        about ${this.shard.fullCatalogSize.toLocaleString()}.${lean}${noNeighbour} Here's the closest it has, shown as such.</p>
+      </div>`;
+  }
+
+  // States distance plainly rather than asserting a match: when the region is thin the top pick can
+  // still be cosine-close, so this reports the cosine without claiming it's far (or near).
+  private honestReason(f: ScoredFilm, pool: Pool): string {
+    const names = this.topTagNames(pool.shardIndex[f.poolIndex], 2);
+    const leans = names.length ? ` It leans ${joinTags(names)}.` : "";
+    return `The closest the shard has to your taste — cosine ${f.cosine.toFixed(2)}.${leans}`;
+  }
+
+  private strongTagNames(k: number): string[] {
+    return this.session
+      .strongTagPositions()
+      .slice(0, k)
+      .map((pos) => this.shard.tagNames.get(pos) ?? `tag#${pos}`);
   }
 
   private pickCard(f: ScoredFilm, pool: Pool, reason: string, wild = false): string {
