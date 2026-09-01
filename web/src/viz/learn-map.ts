@@ -149,7 +149,7 @@ function summarise(shard: DecodedShard, centroid: number[] | null): string {
   return `Your taste marker sits${region}. The films nearest it are ${titles.join(", ")}.`;
 }
 
-function prefersReducedMotion(): boolean {
+export function prefersReducedMotion(): boolean {
   try {
     return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   } catch {
