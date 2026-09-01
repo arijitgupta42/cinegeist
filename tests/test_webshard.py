@@ -99,6 +99,37 @@ def test_top_tags_takes_the_strongest_and_drops_zeros() -> None:
     assert tags[0][1] == 204  # 0.8 rescaled to a 0–255 byte
 
 
+# -- coverage ------------------------------------------------------------------------
+
+
+def test_per_film_coverage_measures_the_kept_neighbourhood() -> None:
+    # Two tight clusters, A (rows 0-2) and B (rows 3-5); cross-cluster cosine is ~0.
+    full = np.array(
+        [
+            [1.0, 0.0, 0.0, 0.0],
+            [0.99, 0.10, 0.0, 0.0],
+            [0.98, 0.15, 0.0, 0.0],  # A
+            [0.0, 0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.99, 0.10],
+            [0.0, 0.0, 0.98, 0.15],  # B
+        ],
+        dtype=np.float32,
+    )
+    # The shard keeps one A film and all three B films.
+    coverage = build.per_film_coverage(full, np.array([0, 3, 4, 5]))
+    assert coverage.dtype == np.uint8
+    # A film 0's neighbourhood is the 3 A films but only itself survived → 1/3 ≈ 85/255.
+    assert coverage[0] == round(255 / 3)
+    # Every B film's whole neighbourhood survived → fully covered.
+    assert list(coverage[1:]) == [255, 255, 255]
+
+
+def test_per_film_coverage_is_never_zero_for_an_isolated_film() -> None:
+    full = np.array([[1.0, 0.0], [0.0, 1.0]], dtype=np.float32)  # orthogonal, no neighbours
+    coverage = build.per_film_coverage(full, np.array([0, 1]))
+    assert list(coverage) == [255, 255]  # each counts only itself, in both → coverage 1
+
+
 # -- the whole build on a synthetic catalog ------------------------------------------
 
 
@@ -149,12 +180,17 @@ def test_build_shard_produces_a_decodable_bundle() -> None:
 
     # The binary decodes back to the shapes the manifest promises.
     sections = {s["name"]: s for s in m["binary"]["sections"]}
-    assert set(sections) == {"vectors", "xyz", "tag_pos", "tag_score"}
+    assert set(sections) == {"vectors", "xyz", "tag_pos", "tag_score", "coverage"}
     assert len(result.binary) == sum(s["length"] for s in sections.values())
     vec = sections["vectors"]
     block = result.binary[vec["offset"] : vec["offset"] + vec["length"]]
     decoded = np.frombuffer(block, dtype=np.int8).reshape(vec["shape"])
     assert decoded.shape == (10, 4)
+
+    cov = sections["coverage"]
+    cov_block = result.binary[cov["offset"] : cov["offset"] + cov["length"]]
+    cov_bytes = np.frombuffer(cov_block, np.uint8)
+    assert cov_bytes.shape == (10,) and cov_bytes.min() >= 1  # a film always covers itself
 
 
 def test_build_shard_rejects_an_empty_catalog() -> None:
@@ -184,6 +220,15 @@ def test_committed_shard_is_well_formed_and_within_budget() -> None:
     sections = {s["name"]: s for s in manifest["binary"]["sections"]}
     assert len(binary) == sum(s["length"] for s in sections.values())
     assert sections["vectors"]["shape"] == [build.TARGET_FILMS, build.SVD_COMPONENTS]
+
+    # Coverage bytes are present and a real measurement — a genuine spread, not padded to
+    # fully-covered, and every film covers at least itself (the honesty signal, §8.4, hard rule 9).
+    cov = sections["coverage"]
+    assert cov["shape"] == [build.TARGET_FILMS]
+    cov_bytes = np.frombuffer(binary[cov["offset"] : cov["offset"] + cov["length"]], np.uint8)
+    assert cov_bytes.min() >= 1
+    assert cov_bytes.min() < cov_bytes.max(), "coverage should vary across the shard"
+    assert (cov_bytes < 64).any(), "some films should land in thin regions (< 0.25 coverage)"
 
     gz = len(gzip.compress(binary, 9)) + len(
         gzip.compress((SHARD_DIR / "shard.json").read_bytes(), 9)
