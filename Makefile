@@ -44,5 +44,5 @@ catalog:  ## build data/cinegeist.db and data/genome.npy (downloads MovieLens; s
 catalog-refresh:
 	@echo "Incremental catalog refresh arrives later in session 2 (see plan.md)."
 
-web-shard:
-	@echo "Web shard build arrives in session 5 (see plan.md)."
+web-shard:  ## build the browser demo shard into web/public/shard (needs data/; slow) then commit
+	$(BIN)/python scripts/build_web_shard.py
