@@ -40,3 +40,29 @@ jobs:
       - name: Test
         # Network-marked integration tests are excluded by pyproject's addopts.
         run: pytest
+
+  # The browser demo reimplements the deterministic scorer in TypeScript and checks it against the
+  # same spec/ fixtures the Python suite uses (plan.md §8.6). Running both here is the drift guard:
+  # change a scoring rule without regenerating the fixtures and one of these two jobs goes red.
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build

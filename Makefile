@@ -10,7 +10,8 @@ else
 	BIN := $(VENV)/bin
 endif
 
-.PHONY: setup lint format test test-network check catalog catalog-refresh spec web-shard
+.PHONY: setup lint format test test-network check catalog catalog-refresh spec web-shard \
+	web-install web-test web-build web-dev
 
 setup:  ## create the venv, install the package (with dev extras), install the git hook
 	$(PY) -m venv $(VENV)
@@ -46,3 +47,15 @@ catalog-refresh:
 
 web-shard:  ## build the browser demo shard into web/public/shard (needs data/; slow) then commit
 	$(BIN)/python scripts/build_web_shard.py
+
+web-install:  ## install the browser demo's npm dependencies (uses the committed lockfile)
+	cd web && npm ci
+
+web-test:  ## run the demo's vitest suite, including the shared spec/ fixtures (plan.md §8.6)
+	cd web && npm test
+
+web-build:  ## typecheck and build the static demo bundle into web/dist
+	cd web && npm run build
+
+web-dev:  ## run the demo's dev server (needs a built shard in web/public/shard)
+	cd web && npm run dev
