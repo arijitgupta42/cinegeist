@@ -528,6 +528,95 @@ main {
   font-style: normal;
 }
 
+/* -- taste bars (View C, plan.md §9.2) --------------------------------------------- */
+
+.viz-bars {
+  margin-top: 1.75rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--hairline);
+}
+.bars {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.bar-row {
+  display: grid;
+  grid-template-columns: minmax(7rem, 12rem) 1fr;
+  align-items: center;
+  gap: 0.75rem;
+}
+.bar-label {
+  text-align: right;
+  color: var(--ink-dim);
+  text-transform: none; /* tag names read better in their own case than uppercased */
+  letter-spacing: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bar-track {
+  position: relative;
+  height: 16px;
+  background: var(--surface-2);
+  border: 1px solid var(--hairline);
+  border-radius: 3px;
+}
+/* the zero line down the middle of the diverging axis */
+.bar-track::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -1px;
+  bottom: -1px;
+  width: 1px;
+  background: var(--line-strong);
+}
+.bar-fill {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  width: calc(var(--w) * 0.5);
+  opacity: var(--o);
+  animation: barGrow 600ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.bar-row.pos .bar-fill {
+  left: 50%;
+  background: var(--cyan);
+  border-radius: 0 2px 2px 0;
+}
+.bar-row.neg .bar-fill {
+  right: 50%;
+  background: var(--magenta);
+  border-radius: 2px 0 0 2px;
+}
+@keyframes barGrow {
+  from {
+    width: 0;
+  }
+  to {
+    width: calc(var(--w) * 0.5);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bar-fill {
+    animation: none;
+  }
+}
+.bars-key {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 1rem 0 0;
+  color: var(--ink-faint);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
 /* -- footer ------------------------------------------------------------------------ */
 
 .foot {
