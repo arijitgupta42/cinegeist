@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
@@ -8,8 +10,29 @@ import { defineConfig } from "vitest/config";
 const here = fileURLToPath(new URL(".", import.meta.url));
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 
-export default defineConfig({
+// A short content hash of the committed shard, injected so the demo fetches it as `?v=<hash>`.
+// GitHub Pages could otherwise serve a stale shard after a redeploy; the hash changes with the
+// bytes, busting the browser/CDN cache and the IndexedDB entry (which is keyed by the URL). Computed
+// from the files on disk at config load; falls back to "dev" if they aren't built yet.
+function shardHash(): string {
+  try {
+    const dir = fileURLToPath(new URL("./public/shard/", import.meta.url));
+    const h = createHash("sha256");
+    for (const f of ["shard.json", "shard.bin", "probes.json"]) h.update(readFileSync(dir + f));
+    return h.digest("hex").slice(0, 12);
+  } catch {
+    return "dev";
+  }
+}
+
+export default defineConfig(({ command }) => ({
   root: here,
+  // A GitHub Pages project site is served under /<repo>/, so the production build needs that base;
+  // the dev server stays at the root so `make web-dev` opens at http://localhost:5173/.
+  base: command === "build" ? "/cinegeist/" : "/",
+  define: {
+    __SHARD_HASH__: JSON.stringify(shardHash()),
+  },
   server: {
     fs: {
       // Allow importing spec/constants.json (and, in tests, the spec/ fixtures) from the repo root.
@@ -21,4 +44,4 @@ export default defineConfig({
     environment: "node",
     include: ["src/**/*.test.ts"],
   },
-});
+}));

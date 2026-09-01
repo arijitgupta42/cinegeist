@@ -250,13 +250,18 @@ export async function clearShardCache(): Promise<void> {
  * page's base path. The only network traffic here is the two shard files; posters lazy-load later
  * from TMDB's CDN, and nothing else leaves the page (plan.md §8.1).
  */
+// The shard's content hash, injected at build time (vite.config.ts). Appending it as `?v=<hash>`
+// busts the browser/CDN cache — and, since the IndexedDB entry is keyed by the full URL, the local
+// cache too — whenever the committed shard changes, so a redeploy can never serve stale bytes.
+const CACHE_BUST = typeof __SHARD_HASH__ === "string" ? `?v=${__SHARD_HASH__}` : "";
+
 export async function loadShard(baseUrl: string): Promise<DecodedShard> {
-  const jsonUrl = `${baseUrl}shard/shard.json`;
+  const jsonUrl = `${baseUrl}shard/shard.json${CACHE_BUST}`;
   const cached = await idbGet<CachedShard>(jsonUrl);
   if (cached) return decodeShard(cached.manifest, cached.bin);
 
   const manifest = (await (await fetch(jsonUrl)).json()) as ShardManifest;
-  const binUrl = `${baseUrl}shard/${manifest.binary.file}`;
+  const binUrl = `${baseUrl}shard/${manifest.binary.file}${CACHE_BUST}`;
   const bin = await (await fetch(binUrl)).arrayBuffer();
   await idbPut<CachedShard>(jsonUrl, { manifest, bin });
   return decodeShard(manifest, bin);
@@ -264,7 +269,7 @@ export async function loadShard(baseUrl: string): Promise<DecodedShard> {
 
 /** Load the precomputed probe questions, preferring the IndexedDB cache over the network. */
 export async function loadProbes(baseUrl: string): Promise<ProbesFile> {
-  const url = `${baseUrl}shard/probes.json`;
+  const url = `${baseUrl}shard/probes.json${CACHE_BUST}`;
   const cached = await idbGet<ProbesFile>(url);
   if (cached) return cached;
   const probes = (await (await fetch(url)).json()) as ProbesFile;
