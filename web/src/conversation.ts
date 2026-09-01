@@ -17,6 +17,8 @@ import { selectDemoProbe, shouldStop } from "./probes.ts";
 import { assess, REASON_NO_CLOSE_NEIGHBOUR, type CoverageVerdict } from "./coverage.ts";
 import { DemoSession, type TasteAxis } from "./session.ts";
 import { tasteBarsHtml } from "./viz/bars.ts";
+import { buildMap, mountMap } from "./viz/learn-map.ts";
+import type { TasteMap } from "./viz/space3d.ts";
 import {
   filmTopTags,
   TAG_SENTINEL,
@@ -43,6 +45,9 @@ export class Conversation {
   private session: DemoSession;
   private probes: PrecomputedProbe[];
   private pendingProbe: PrecomputedProbe | null = null;
+  private currentStage: Stage = "react";
+  private map: TasteMap | null = null;
+  private mapToken = 0; // invalidates in-flight async map mounts when the stage changes
 
   constructor(
     private mount: HTMLElement,
@@ -73,6 +78,13 @@ export class Conversation {
 
   /** Switch the active stage, sync the strip, and render that stage's view into the panel. */
   goToStage(stage: Stage): void {
+    // Leaving any stage tears down the 3D map if one is up, and invalidates a mount still loading.
+    this.currentStage = stage;
+    this.mapToken++;
+    if (this.map) {
+      this.map.dispose();
+      this.map = null;
+    }
     this.strip.querySelectorAll<HTMLElement>("[data-stage]").forEach((btn) => {
       const active = btn.dataset.stage === stage;
       btn.classList.toggle("active", active);
@@ -182,16 +194,47 @@ export class Conversation {
 
   private renderLearn(): void {
     if (!this.session.hasReactions) return this.renderEmpty("learn");
+
+    // The map marks the recommendations, so it needs the same ranking the Recommend tab shows.
+    const recs = this.computeRecs(this.session.centroid());
+    const pool = recs.pool;
+    const pickIndices = recs.picks.map((f) => pool.shardIndex[f.poolIndex]);
+    const wildcardIndex = recs.wildcard ? pool.shardIndex[recs.wildcard.poolIndex] : null;
+    const { model, legend, summary } = buildMap(this.session, this.shard, { pickIndices, wildcardIndex });
+
+    const legendHtml = legend
+      .slice(0, 6)
+      .map((e) => `<span class="lg"><span class="lg-dot" style="background:${e.color}"></span>${escapeHtml(e.label)}</span>`)
+      .join("");
+    const howto = model.reducedMotion ? "Shown as a still — you asked for reduced motion." : "Drag to rotate, scroll to zoom.";
+
     this.mount.innerHTML = `
       <div class="panel-head"><span class="sq cyan"></span><span class="mono">Learn</span>
         <span class="mono progress">from ${this.reactionLabel()}</span></div>
-      <p class="note">Every pair you react to nudges this. It's the same taste the picks are ranked against.</p>
+      <p class="note">Each dot is a film, coloured by its region of taste-space. The white marker is where your
+      taste sits — it walks the path it took as you reacted. Cyan dots are your picks, magenta the wildcard. ${howto}</p>
+      <div class="map-wrap" id="tastemap"><div class="map-loading mono">Loading the map…</div></div>
+      <div class="map-legend">${legendHtml}</div>
+      <p class="map-summary">${escapeHtml(summary)}</p>
       ${tasteBarsHtml(this.session.tasteAxes())}
       <div class="controls">
         <button class="btn" data-go="react"><span class="mono">Answer more pairs</span></button>
         <button class="btn btn-accent" data-go="recommend"><span class="mono">See your picks</span>${CHEV}</button>
       </div>`;
     this.wireNav();
+
+    const container = this.mount.querySelector<HTMLElement>("#tastemap");
+    if (!container) return;
+    const token = this.mapToken;
+    void mountMap(container, model).then((m) => {
+      container.querySelector(".map-loading")?.remove();
+      // If the stage changed (or Learn re-rendered) while three.js was loading, this mount is stale.
+      if (token !== this.mapToken || this.currentStage !== "learn") {
+        m?.dispose();
+        return;
+      }
+      this.map = m;
+    });
   }
 
   // -- Recommend ---------------------------------------------------------------------

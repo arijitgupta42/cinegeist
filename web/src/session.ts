@@ -115,6 +115,22 @@ export class DemoSession {
     return computeProfile(this.events, movies, new Map(), this.shard.nComponents, new Map()).centroid;
   }
 
+  /**
+   * The reacted films as (shard index, signed decayed weight) pairs, in reaction order — the input
+   * to the taste-space map's barycentre and trail (plan.md §9.2). The weight is the profile's own
+   * value × weight × decay, so the marker sits where the profile does, in the map's xyz space.
+   */
+  reactionWeights(): Array<{ index: number; w: number }> {
+    const out: Array<{ index: number; w: number }> = [];
+    for (const e of this.events) {
+      const index = this.idToIndex.get(e.subject);
+      if (index === undefined) continue;
+      const w = e.value * e.weight * decayFactor(e.ageDays);
+      if (w !== 0) out.push({ index, w });
+    }
+    return out;
+  }
+
   /** The profile's strongest genome-tag positions, from the reacted films' top-tag tables. */
   strongTagPositions(): number[] {
     return [...this.aggregateTags().entries()]

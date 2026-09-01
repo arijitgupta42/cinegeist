@@ -652,6 +652,82 @@ main {
   letter-spacing: 0;
 }
 
+/* -- taste-space map (View A, plan.md §9.2) ---------------------------------------- */
+
+.map-wrap {
+  position: relative;
+  height: 420px;
+  margin: 1rem 0 0.75rem;
+  background: radial-gradient(circle at 50% 38%, var(--surface-2), var(--black));
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.map-wrap canvas {
+  display: block;
+}
+.map-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-dim);
+}
+.map-2d {
+  display: block;
+  width: 100%;
+}
+.map-tip {
+  position: absolute;
+  z-index: 3;
+  pointer-events: none;
+  background: var(--surface-3);
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  padding: 0.4rem 0.55rem;
+  font-size: 0.8rem;
+  max-width: 230px;
+  color: var(--ink);
+}
+.map-tip strong {
+  font-weight: 600;
+}
+.map-tip span {
+  color: var(--ink-faint);
+}
+.map-tip em {
+  display: block;
+  margin-top: 0.2rem;
+  font-style: normal;
+  color: var(--cyan);
+  font-size: 0.72rem;
+}
+.map-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.9rem;
+  margin: 0 0 0.5rem;
+}
+.lg {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  color: var(--ink-dim);
+}
+.lg-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+.map-summary {
+  color: var(--ink-faint);
+  font-size: 0.82rem;
+  margin: 0 0 0.75rem;
+}
+
 /* -- Explain view (View B as text, plan.md §9.2) ----------------------------------- */
 
 .why-list {
@@ -777,5 +853,8 @@ main {
   .film .poster,
   .pick .poster {
     max-width: 200px;
+  }
+  .map-wrap {
+    height: 320px;
   }
 }
