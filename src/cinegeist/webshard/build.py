@@ -15,10 +15,11 @@ The pipeline, all deterministic:
 3. **Embed** the same rows in 3D with PCA (linear, so the marker and trail in the visualization
    project correctly), sign-canonicalised so the bundle is byte-reproducible.
 4. **Keep** each film's top tags for templated explanations, plus plain metadata.
+5. **Measure** per-film coverage against the full catalog — the honesty byte (§8.4) — so the demo
+   can say when a visitor's taste points somewhere the shard covers thinly.
 
 The result is a ``shard.json`` (metadata, the int8 scales, the binary layout) and a packed
-``shard.bin`` (int8 vectors, then float32 xyz). Per-film coverage — the honesty byte — is added by
-a later PR; the binary layout leaves room for it at the end so vector and xyz offsets don't move.
+``shard.bin`` (int8 vectors, float32 xyz, the top-tag arrays, then the coverage byte).
 """
 
 from __future__ import annotations
@@ -28,6 +29,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 import numpy as np
+
+from ..recommend.coverage import COVERAGE_SIMILARITY
 
 SHARD_VERSION = 1
 TARGET_FILMS = 2000
@@ -163,18 +166,57 @@ def top_tags(vector: np.ndarray, k: int = TOP_TAGS_PER_FILM) -> list[tuple[int, 
     return out
 
 
+# -- coverage (the honesty measurement, plan.md §8.4) --------------------------------
+
+
+def per_film_coverage(
+    full: np.ndarray,
+    shard_rows: np.ndarray,
+    *,
+    threshold: float = COVERAGE_SIMILARITY,
+    chunk: int = 256,
+) -> np.ndarray:
+    """Per-shard-film coverage byte: the share of its full-catalog neighbourhood the shard kept.
+
+    For each shard film, count the full-catalog films within cosine ``threshold`` of it (its true
+    neighbourhood) and the shard films within the same radius; coverage is the ratio in ``[0, 1]``,
+    quantised to a 0–255 byte. Measured on the *full* genome at full precision, because the build is
+    the only place that still holds what the shard is discarding. A film always counts itself in
+    both, so coverage is never zero and an isolated film (empty neighbourhood) reads as fully
+    covered rather than as a false gap. Returns a ``uint8`` array aligned to ``shard_rows``.
+    """
+    full = np.asarray(full, dtype=np.float32)
+    norms = np.linalg.norm(full, axis=1)
+    norms[norms == 0.0] = 1.0
+    unit = full / norms[:, None]
+    shard_unit = unit[shard_rows]
+
+    n_shard = (shard_unit @ shard_unit.T >= threshold).sum(axis=1)
+    n_full = np.zeros(len(shard_rows), dtype=np.int64)
+    for s in range(0, len(shard_rows), chunk):  # chunked so the full similarity block stays small
+        sim = shard_unit[s : s + chunk] @ unit.T
+        n_full[s : s + chunk] = (sim >= threshold).sum(axis=1)
+
+    coverage = n_shard / np.maximum(n_full, 1)
+    return np.clip(np.round(coverage * 255.0), 0, 255).astype(np.uint8)
+
+
 # -- packing -------------------------------------------------------------------------
 
 
 def _pack(
-    q_vectors: np.ndarray, xyz: np.ndarray, tag_pos: np.ndarray, tag_score: np.ndarray
+    q_vectors: np.ndarray,
+    xyz: np.ndarray,
+    tag_pos: np.ndarray,
+    tag_score: np.ndarray,
+    coverage: np.ndarray,
 ) -> tuple[bytes, list[dict]]:
     """Concatenate the numeric arrays into one blob and describe their layout for the decoder.
 
     Everything fixed-size and per-film lives here rather than in the JSON: int8 taste vectors,
-    float32 xyz, and the top-tag positions/scores. Packed little-endian bytes gzip far better than
-    the same integers spelled out in JSON, which is what keeps the bundle inside its budget. The
-    order is fixed and coverage (a later PR) appends after ``tag_score`` so nothing above it moves.
+    float32 xyz, the top-tag positions/scores, and the coverage byte. Packed little-endian bytes
+    gzip far better than the same integers spelled out in JSON, which is what keeps the bundle
+    inside its budget. The order is fixed; coverage is last, so adding it moved no earlier offset.
     """
     n, k = q_vectors.shape
     parts = {
@@ -186,6 +228,7 @@ def _pack(
             "uint8",
             [n, TOP_TAGS_PER_FILM],
         ),
+        "coverage": (np.ascontiguousarray(coverage, dtype=np.uint8), "uint8", [n]),
     }
     blob = b""
     sections: list[dict] = []
@@ -263,11 +306,13 @@ def build_shard(
     popularity = np.array([f.popularity for f in films])
     sample = stratified_sample(years, popularity, target, seed=seed)
     chosen = [films[i] for i in sample]
-    sub = np.asarray(matrix[[f.genome_row for f in chosen]], dtype=np.float32)
+    shard_rows = np.array([f.genome_row for f in chosen])
+    sub = np.asarray(matrix[shard_rows], dtype=np.float32)
 
     projected, _ = svd_project(sub, components)
     q_vectors, scales = quantise_int8(projected)
     xyz = pca_3d(sub)
+    coverage = per_film_coverage(matrix, shard_rows)
 
     n = len(chosen)
     tag_pos = np.full((n, TOP_TAGS_PER_FILM), TAG_SENTINEL, dtype="<u2")
@@ -289,7 +334,7 @@ def build_shard(
                 "poster": film.poster_path,
             }
         )
-    binary, sections = _pack(q_vectors, xyz, tag_pos, tag_score)
+    binary, sections = _pack(q_vectors, xyz, tag_pos, tag_score, coverage)
 
     manifest = {
         "version": SHARD_VERSION,
@@ -298,6 +343,7 @@ def build_shard(
         "n_films": len(chosen),
         "n_components": int(q_vectors.shape[1]),
         "full_catalog_size": full_size,
+        "coverage_similarity": COVERAGE_SIMILARITY,
         "scales": [float(s) for s in scales],
         "binary": {"file": "shard.bin", "sections": sections},
         "tag_names": {str(pos): names.get(pos, f"tag#{pos}") for pos in sorted(used_positions)},
