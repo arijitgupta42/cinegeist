@@ -8,6 +8,7 @@ import { recommend, type Candidate, type Recommendations, type ScoredFilm } from
 import { selectDemoProbe, shouldStop } from "./probes.ts";
 import { assess, REASON_NO_CLOSE_NEIGHBOUR, type CoverageVerdict } from "./coverage.ts";
 import { DemoSession } from "./session.ts";
+import { tasteBarsHtml } from "./viz/bars.ts";
 import {
   filmTopTags,
   TAG_SENTINEL,
@@ -184,12 +185,18 @@ export class Conversation {
            </div>`
         : "";
 
+    // The taste bars read the same axes the reasons above are built from (plan.md §9.2, §9.3), so
+    // the chart and the picks always tell one story. Empty until there's signal, so it hides itself
+    // on the escape-hatch-with-no-reactions path rather than drawing an empty frame.
+    const bars = tasteBarsHtml(this.session.tasteAxes());
+
     this.mount.innerHTML = `
       <div class="panel-head"><span class="sq ${verdict.honest ? "orange" : "cyan"}"></span><span class="mono">${header}</span>
         <span class="mono progress">from ${this.session.turn} reaction${this.session.turn === 1 ? "" : "s"}</span></div>
       ${verdict.honest ? this.honestyBanner(verdict) : ""}
       <div class="picks">${pickCards || `<p class="note">Not enough signal yet — react to a few pairs first.</p>`}</div>
       ${wildcard}
+      ${bars}
       <div class="controls">
         <button class="btn" data-restart><span class="mono">Start over</span></button>
         <button class="btn" data-export><span class="mono">Export session</span></button>
