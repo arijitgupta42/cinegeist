@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 import { computeProfile, type DecayEvent, type MovieRow, type TagRow } from "./profile.ts";
 import { recommend, scorePool, type Candidate } from "./score.ts";
 import { chooseProbe, shouldStop, wantsToStop, type ProbeMovie } from "./probes.ts";
+import { honestyReasons, nearestCosine, regionCoverage } from "./coverage.ts";
 import { SCORING } from "./constants.ts";
 
 const TOLERANCE = 1e-5;
@@ -195,6 +196,40 @@ describe("scoring/probes.json — escape hatch", () => {
   const cases = load("scoring/probes.json").escape_hatch as any[];
   for (const c of cases) {
     it(c.text, () => assertClose({ wants_to_stop: wantsToStop(c.text) }, c.expected));
+  }
+});
+
+// -- coverage ------------------------------------------------------------------------
+
+function flat(rows: number[][]): Float64Array {
+  const nCols = rows[0]?.length ?? 0;
+  const out = new Float64Array(rows.length * nCols);
+  rows.forEach((r, i) => r.forEach((x, j) => (out[i * nCols + j] = x)));
+  return out;
+}
+
+describe("scoring/coverage.json — region", () => {
+  const cases = load("scoring/coverage.json").region as any[];
+  for (const c of cases) {
+    it(c.name, () => {
+      const nCols = c.centroid.length;
+      const vectors = flat(c.vectors);
+      const result = {
+        region_coverage: regionCoverage(c.centroid, vectors, nCols, c.coverage, c.top_k),
+        nearest_cosine: nearestCosine(c.centroid, vectors, nCols),
+      };
+      assertClose(result, c.expected);
+    });
+  }
+});
+
+describe("scoring/coverage.json — verdict", () => {
+  const cases = load("scoring/coverage.json").verdict as any[];
+  for (const c of cases) {
+    it(c.name, () => {
+      const reasons = honestyReasons(c.region_coverage, c.nearest_cosine);
+      assertClose({ honest: reasons.length > 0, reasons }, c.expected);
+    });
   }
 });
 
