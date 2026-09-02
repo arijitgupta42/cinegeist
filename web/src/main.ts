@@ -6,6 +6,8 @@
 import "./style.css";
 import { clearShardCache, loadProbes, loadShard, type DecodedShard, type ProbesFile } from "./shard.ts";
 import { Conversation } from "./conversation.ts";
+import { CannedChat } from "./chat.ts";
+import { TRANSCRIPT } from "./transcript.ts";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 
@@ -30,6 +32,7 @@ function renderChrome(): void {
         </a>
         <div class="nav-links">
           <a class="nav-link" href="#how"><span class="sq green"></span><span class="mono">How it works</span></a>
+          <a class="nav-link" href="#conversation"><span class="sq cyan"></span><span class="mono">Conversation</span></a>
           <a class="nav-link" href="#privacy"><span class="sq magenta"></span><span class="mono">Privacy</span></a>
           <a class="nav-link" href="#full"><span class="sq orange"></span><span class="mono">Full version</span></a>
         </div>
@@ -68,6 +71,14 @@ function renderChrome(): void {
       <p class="stage-blurb" id="stage-blurb" hidden></p>
       <section class="panel" id="panel"></section>
     </main>
+
+    <section class="wrap section" id="conversation">
+      <div class="section-head"><span class="sq cyan"></span><h2 class="mono">A full conversation</h2></div>
+      <p class="section-lead">The demo above is the live recommender with the words stripped out. The full
+      version keeps the words — it phrases every question, reads your answers in plain language, and
+      explains the picks. Here's a recording of one; step through it.</p>
+      <div class="chat" id="chat"></div>
+    </section>
 
     <section class="wrap section" id="privacy">
       <div class="section-head"><span class="sq magenta"></span><h2 class="mono">Privacy</h2></div>
@@ -191,6 +202,9 @@ function setupScrollSpy(): void {
 async function main(): Promise<void> {
   renderChrome();
   setupScrollSpy();
+
+  const chatMount = app.querySelector<HTMLElement>("#chat");
+  if (chatMount) new CannedChat(chatMount, TRANSCRIPT).render();
 
   app.querySelector("[data-clear]")?.addEventListener("click", async () => {
     try {

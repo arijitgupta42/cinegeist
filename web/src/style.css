@@ -882,6 +882,118 @@ main {
   color: var(--ink-dim);
   font-size: 0.9rem;
 }
+
+/* -- conversation replay ----------------------------------------------------------- */
+/* the canned chat the visitor steps through; full mode reuses the same bubbles (chat.ts) */
+.chat {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+.chat-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 1rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--ink-dim);
+  font-size: 0.76rem;
+}
+.chat-log {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  padding: 1.25rem;
+  max-height: 460px;
+  overflow-y: auto;
+}
+.chat-row {
+  display: flex;
+}
+.chat-row.you {
+  justify-content: flex-end;
+}
+.chat-bubble {
+  max-width: 80%;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+.chat-row.you .chat-bubble {
+  background: color-mix(in srgb, var(--cyan) 12%, var(--surface-2));
+  border-color: color-mix(in srgb, var(--cyan) 35%, var(--line));
+}
+.chat-bubble.picks-bubble {
+  max-width: 100%;
+  width: 100%;
+}
+.chat-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.7rem;
+  color: var(--ink-dim);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.chat-picks {
+  display: grid;
+  gap: 0.6rem;
+}
+.chat-pick {
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+.chat-pick.wild {
+  border-color: color-mix(in srgb, var(--magenta) 45%, var(--line));
+}
+.cp-title {
+  font-weight: 600;
+  margin-bottom: 0.2rem;
+}
+.cp-title .year {
+  color: var(--ink-faint);
+  font-weight: 400;
+}
+.cp-title .tag {
+  margin-left: 0.4rem;
+  color: var(--magenta);
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.cp-reason {
+  color: var(--ink-dim);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.chat-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.85rem 1rem;
+  border-top: 1px solid var(--line);
+  background: var(--surface-2);
+}
+.chat-controls .btn[disabled] {
+  opacity: 0.4;
+  cursor: default;
+}
+.chat-progress {
+  margin-left: auto;
+  color: var(--ink-faint);
+  font-size: 0.74rem;
+}
+
 /* -- footer ------------------------------------------------------------------------ */
 
 .foot {
@@ -971,5 +1083,8 @@ main {
   }
   .evidence-wrap {
     height: 380px;
+  }
+  .chat-bubble {
+    max-width: 92%;
   }
 }
