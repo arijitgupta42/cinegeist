@@ -83,6 +83,30 @@ def load_genome(path: Path) -> np.memmap:
     return np.load(path, mmap_mode="r")
 
 
+def write_matrix(path: Path, matrix: np.ndarray) -> None:
+    """Atomically (over)write the genome memmap with ``matrix``.
+
+    Used when *predicted* vectors are filled in (plan.md §2.2): the recommender indexes one matrix
+    by ``movies.genome_row``, so predicted vectors have to live in the same file as the measured
+    ones. The predictor rebuilds the file as ``[measured rows; predicted rows]`` and calls this,
+    which keeps the operation idempotent — a re-run replaces the file rather than growing it with
+    orphaned rows. The write goes to a temporary file that atomically replaces the original, so an
+    interrupted write never leaves a half-written genome.
+    """
+    matrix = np.asarray(matrix, dtype=DTYPE)
+    if matrix.ndim != 2:
+        raise ValueError(f"expected a 2-D matrix, got shape {matrix.shape}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_name(path.name + ".tmp")
+    out = open_memmap(tmp_path, mode="w+", dtype=DTYPE, shape=matrix.shape)
+    try:
+        out[:] = matrix
+        out.flush()
+    finally:
+        del out  # release the write handle before the rename (Windows needs this)
+    os.replace(tmp_path, path)
+
+
 def cosine_scores(matrix: np.ndarray, query: np.ndarray) -> np.ndarray:
     """Cosine similarity of every row of ``matrix`` against ``query``.
 

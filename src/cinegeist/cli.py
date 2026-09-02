@@ -295,6 +295,11 @@ def catalog_build(
     skip_enrich: bool = typer.Option(
         False, "--skip-enrich", help="Skip the TMDB enrichment stage (genome only)."
     ),
+    skip_predict: bool = typer.Option(
+        False,
+        "--skip-predict",
+        help="Skip predicting genome vectors for uncovered films from TMDB features.",
+    ),
     data: str | None = typer.Option(
         None,
         "--data-dir",
@@ -304,8 +309,9 @@ def catalog_build(
     """Download MovieLens and build data/cinegeist.db and data/genome.npy.
 
     Resumable: a partial download continues, and finished stages are skipped. The first run
-    fetches a few hundred MB and processes the tag genome, so it takes a while. TMDB
-    enrichment runs last when a TMDB credential is set (see `cinegeist config`).
+    fetches a few hundred MB and processes the tag genome, so it takes a while. TMDB enrichment
+    runs next when a TMDB credential is set (see `cinegeist config`), then genome vectors are
+    predicted for films the tag genome doesn't cover but TMDB does.
     """
     # Imported lazily so the light commands (models, config) don't pay numpy's import cost.
     from .catalog.build import build_catalog
@@ -315,6 +321,7 @@ def catalog_build(
             data_dir=Path(data) if data else None,
             force=force,
             enrich=not skip_enrich,
+            predict_missing=not skip_predict,
             tmdb_region=region,
             console=console,
         )
