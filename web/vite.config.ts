@@ -27,9 +27,11 @@ function shardHash(): string {
 
 export default defineConfig(({ command }) => ({
   root: here,
-  // A GitHub Pages project site is served under /<repo>/, so the production build needs that base;
-  // the dev server stays at the root so `make web-dev` opens at http://localhost:5173/.
-  base: command === "build" ? "/cinegeist/" : "/",
+  // A relative base makes one build work wherever it's mounted: a GitHub Pages project site under
+  // /<repo>/, and equally `cinegeist serve` hosting it at the root for full mode (plan.md §10,
+  // session 8). All asset and data URLs go through import.meta.env.BASE_URL, which becomes "./".
+  // The dev server stays at the root so `make web-dev` opens at http://localhost:5173/.
+  base: command === "build" ? "./" : "/",
   define: {
     __SHARD_HASH__: JSON.stringify(shardHash()),
   },

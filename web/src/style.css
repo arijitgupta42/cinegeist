@@ -993,6 +993,44 @@ main {
   color: var(--ink-faint);
   font-size: 0.74rem;
 }
+/* full mode (live.ts): the same chat, but with real prompts — option buttons or a text field */
+.chat-options,
+.chat-input,
+.chat-thinking {
+  display: flex;
+  gap: 0.6rem;
+  padding: 0.85rem 1rem;
+  border-top: 1px solid var(--line);
+  background: var(--surface-2);
+}
+.chat-options {
+  flex-wrap: wrap;
+}
+.chat-option {
+  text-align: left;
+}
+.chat-input {
+  align-items: center;
+}
+.chat-input input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+.chat-input input:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: -1px;
+}
+.chat-thinking {
+  align-items: center;
+  color: var(--ink-dim);
+  font-size: 0.8rem;
+}
 
 /* -- footer ------------------------------------------------------------------------ */
 
