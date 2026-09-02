@@ -36,6 +36,17 @@ const CHEV = `<span class="chev" aria-hidden="true">›</span>`;
 
 export type Stage = "react" | "learn" | "recommend" | "explain";
 
+// One line per stage, shown just under the tab strip so the active tab explains itself. These are the
+// per-stage descriptions that used to sit in a separate "how it works" card grid above — redundant
+// there, beside a strip showing the same four stages. Here they're contextual: you read only the one
+// whose stage you're looking at.
+const STAGE_BLURBS: Record<Stage, string> = {
+  react: "Pick which of two real films you'd rather watch. Repeat about eight times; skip any pair you don't know.",
+  learn: "Each choice moves a marker through a map of taste, walking it toward the films you like.",
+  recommend: "Three confident picks and one wildcard — deliberately further out, for when you're feeling adventurous.",
+  explain: "Every pick is traced back to the films and tags you chose, so you can see exactly why.",
+};
+
 interface Pool {
   candidates: Candidate[];
   vectors: Float64Array;
@@ -54,6 +65,7 @@ export class Conversation {
   constructor(
     private mount: HTMLElement,
     private strip: HTMLElement,
+    private blurb: HTMLElement,
     private shard: DecodedShard,
     probesFile: ProbesFile,
   ) {
@@ -96,6 +108,8 @@ export class Conversation {
       btn.classList.toggle("active", active);
       btn.setAttribute("aria-selected", active ? "true" : "false");
     });
+    this.blurb.textContent = STAGE_BLURBS[stage];
+    this.blurb.hidden = false;
     switch (stage) {
       case "react":
         return this.renderReact();

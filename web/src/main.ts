@@ -53,17 +53,8 @@ function renderChrome(): void {
       <p class="section-lead">No sign-up and no questionnaire — you react to real films and the maths does
       the rest. It's the same recommender the full app runs, with the AI phrasing removed, so the demo
       stays a real recommender rather than a mock-up.</p>
-      <ol class="steps">
-        <li><span class="sq green"></span><b>React</b><p>Pick which of two real films you'd rather watch.
-        Repeat about eight times; skip any pair you don't know.</p><span class="step mono">01</span></li>
-        <li><span class="sq cyan"></span><b>Learn</b><p>Each choice moves a marker through a map of taste,
-        walking it toward the films you like.</p><span class="step mono">02</span></li>
-        <li><span class="sq magenta"></span><b>Recommend</b><p>Three confident picks and one wildcard —
-        deliberately further out, for when you're feeling adventurous.</p><span class="step mono">03</span></li>
-        <li><span class="sq orange"></span><b>Explain</b><p>Every pick is traced back to the films and
-        tags you chose, so you can see exactly why.</p><span class="step mono">04</span></li>
-      </ol>
-      <p class="section-lead">The four tabs below are those stages, live — start the demo and step through them.</p>
+      <p class="section-lead">It works in four stages — react, learn, recommend, explain — and they're the
+      four tabs just below, live. Start the demo and step through them; each one explains itself as you go.</p>
     </section>
 
     <div class="strip" role="tablist" aria-label="Pipeline stages — pick one to view">
@@ -74,6 +65,7 @@ function renderChrome(): void {
     </div>
 
     <main class="wrap" id="stage">
+      <p class="stage-blurb" id="stage-blurb" hidden></p>
       <section class="panel" id="panel"></section>
     </main>
 
@@ -221,7 +213,8 @@ async function main(): Promise<void> {
   }
 
   const strip = app.querySelector<HTMLElement>(".strip")!;
-  const conversation = new Conversation(panel(), strip, shard, probes);
+  const blurb = app.querySelector<HTMLElement>("#stage-blurb")!;
+  const conversation = new Conversation(panel(), strip, blurb, shard, probes);
   const begin = (): void => {
     conversation.start();
     scrollToStage();
