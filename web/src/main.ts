@@ -48,7 +48,25 @@ function renderChrome(): void {
       </div>
     </header>
 
-    <div class="strip" id="how" role="tablist" aria-label="How it works — pick a stage to view">
+    <section class="wrap section" id="how">
+      <div class="section-head"><span class="sq green"></span><h2 class="mono">How it works</h2></div>
+      <p class="section-lead">No sign-up and no questionnaire — you react to real films and the maths does
+      the rest. It's the same recommender the full app runs, with the AI phrasing removed, so the demo
+      stays a real recommender rather than a mock-up.</p>
+      <ol class="steps">
+        <li><span class="sq green"></span><b>React</b><p>Pick which of two real films you'd rather watch.
+        Repeat about eight times; skip any pair you don't know.</p><span class="step mono">01</span></li>
+        <li><span class="sq cyan"></span><b>Learn</b><p>Each choice moves a marker through a map of taste,
+        walking it toward the films you like.</p><span class="step mono">02</span></li>
+        <li><span class="sq magenta"></span><b>Recommend</b><p>Three confident picks and one wildcard —
+        deliberately further out, for when you're feeling adventurous.</p><span class="step mono">03</span></li>
+        <li><span class="sq orange"></span><b>Explain</b><p>Every pick is traced back to the films and
+        tags you chose, so you can see exactly why.</p><span class="step mono">04</span></li>
+      </ol>
+      <p class="section-lead">The four tabs below are those stages, live — start the demo and step through them.</p>
+    </section>
+
+    <div class="strip" role="tablist" aria-label="Pipeline stages — pick one to view">
       <button class="seg active" role="tab" data-stage="react" aria-selected="true"><span class="sq green"></span><span class="mono">React</span><span class="step mono">01</span></button>
       <button class="seg" role="tab" data-stage="learn" aria-selected="false"><span class="sq cyan"></span><span class="mono">Learn</span><span class="step mono">02</span></button>
       <button class="seg" role="tab" data-stage="recommend" aria-selected="false"><span class="sq magenta"></span><span class="mono">Recommend</span><span class="step mono">03</span></button>
@@ -59,16 +77,22 @@ function renderChrome(): void {
       <section class="panel" id="panel"></section>
     </main>
 
+    <section class="wrap section" id="privacy">
+      <div class="section-head"><span class="sq magenta"></span><h2 class="mono">Privacy</h2></div>
+      <p class="section-lead">Nothing you do here leaves the page: no account, no server, no AI calls, and
+      your session is gone when the tab closes. It searches a 2,000-film sample and tells you when your
+      taste points somewhere that sample covers thinly. The only network traffic after load is posters,
+      lazy-loaded from TMDB.</p>
+    </section>
+
+    <section class="wrap section" id="full">
+      <div class="section-head"><span class="sq orange"></span><h2 class="mono">The full version</h2></div>
+      <p class="section-lead">The full version searches about 16,000 films and holds a real conversation
+      in plain language, keeping a profile that follows your taste as it changes.</p>
+      <p class="install">Install it: <code>pipx install cinegeist</code></p>
+    </section>
+
     <footer class="wrap foot">
-      <div class="row" id="full">
-        <span><span class="sq cyan"></span> The full version searches about 16,000 films and holds a real conversation in plain language.</span>
-        <span>Install it: <code>pipx install cinegeist</code></span>
-      </div>
-      <p class="attrib" id="privacy">
-        Nothing you do here leaves the page: no account, no server, no AI calls, and your session is gone
-        when the tab closes. It searches a 2,000-film sample and tells you when your taste points somewhere
-        that sample covers thinly. The only network traffic after load is posters, lazy-loaded from TMDB.
-      </p>
       <div class="colophon">
         <a class="tmdb" href="https://www.themoviedb.org/" target="_blank" rel="noopener noreferrer"
           aria-label="The Movie Database (TMDB)"><img src="${base}tmdb.svg" alt="The Movie Database (TMDB)" /></a>
@@ -127,8 +151,54 @@ function scrollToStage(): void {
   document.querySelector("#stage")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
+// Mark the nav link of whichever content section is currently near the top of the viewport, so a
+// jump reads as intentional and you can see where you are. Nav links are hidden on mobile, and this
+// no-ops without IntersectionObserver — the anchors still work either way.
+function setupScrollSpy(): void {
+  const links = new Map<string, HTMLElement>();
+  app.querySelectorAll<HTMLElement>(".nav-link").forEach((link) => {
+    const id = link.getAttribute("href")?.slice(1);
+    if (id) links.set(id, link);
+  });
+  const sections = [...links.keys()]
+    .map((id) => document.getElementById(id))
+    .filter((el): el is HTMLElement => el !== null);
+  if (!sections.length || !("IntersectionObserver" in window)) return;
+
+  const setActive = (activeId: string | null): void => {
+    links.forEach((link, id) => {
+      const on = id === activeId;
+      link.classList.toggle("active", on);
+      if (on) link.setAttribute("aria-current", "true");
+      else link.removeAttribute("aria-current");
+    });
+  };
+
+  const visible = new Set<string>();
+  const observer = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) visible.add(entry.target.id);
+        else visible.delete(entry.target.id);
+      }
+      // The active section is the first one, in document order, still in the top band.
+      let active: string | null = null;
+      for (const id of links.keys()) {
+        if (visible.has(id)) {
+          active = id;
+          break;
+        }
+      }
+      setActive(active);
+    },
+    { rootMargin: "0px 0px -65% 0px", threshold: 0 },
+  );
+  sections.forEach((section) => observer.observe(section));
+}
+
 async function main(): Promise<void> {
   renderChrome();
+  setupScrollSpy();
 
   app.querySelector("[data-clear]")?.addEventListener("click", async () => {
     try {
