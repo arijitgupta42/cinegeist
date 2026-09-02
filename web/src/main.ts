@@ -7,7 +7,7 @@ import "./style.css";
 import { clearShardCache, loadProbes, loadShard, type DecodedShard, type ProbesFile } from "./shard.ts";
 import { Conversation } from "./conversation.ts";
 import { CannedChat } from "./chat.ts";
-import { TRANSCRIPT } from "./transcript.ts";
+import { TRANSCRIPT, TRANSCRIPT_MODEL } from "./transcript.ts";
 import { detectBackend, LiveChat } from "./live.ts";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
@@ -32,10 +32,10 @@ function renderChrome(): void {
           <span class="brand-name">CineGeist</span>
         </a>
         <div class="nav-links">
-          <a class="nav-link" href="#how"><span class="sq green"></span><span class="mono">How it works</span></a>
-          <a class="nav-link" href="#conversation"><span class="sq cyan"></span><span class="mono">Conversation</span></a>
-          <a class="nav-link" href="#privacy"><span class="sq magenta"></span><span class="mono">Privacy</span></a>
-          <a class="nav-link" href="#full"><span class="sq orange"></span><span class="mono">Full version</span></a>
+          <a class="nav-link" href="#how"><span class="sq white"></span><span class="mono">How it works</span></a>
+          <a class="nav-link" href="#conversation"><span class="sq white"></span><span class="mono">Conversation</span></a>
+          <a class="nav-link" href="#privacy"><span class="sq white"></span><span class="mono">Privacy</span></a>
+          <a class="nav-link" href="#full"><span class="sq white"></span><span class="mono">Full version</span></a>
         </div>
         <button class="btn btn-accent" data-start><span class="mono">Start the demo</span>${chevron}</button>
       </div>
@@ -53,7 +53,7 @@ function renderChrome(): void {
     </header>
 
     <section class="wrap section" id="how">
-      <div class="section-head"><span class="sq green"></span><h2 class="mono">How it works</h2></div>
+      <div class="section-head"><span class="sq white"></span><h2 class="mono">How it works</h2></div>
       <p class="section-lead">No sign-up and no questionnaire — you react to real films and the maths does
       the rest. It's the same recommender the full app runs, with the AI phrasing removed, so the demo
       stays a real recommender rather than a mock-up.</p>
@@ -74,7 +74,7 @@ function renderChrome(): void {
     </main>
 
     <section class="wrap section" id="conversation">
-      <div class="section-head"><span class="sq cyan"></span><h2 class="mono">A full conversation</h2></div>
+      <div class="section-head"><span class="sq white"></span><h2 class="mono">A full conversation</h2></div>
       <p class="section-lead" id="conversation-lead">The demo above is the live recommender with the words
       stripped out. The full version keeps the words — it phrases every question, reads your answers in
       plain language, and explains the picks. Here's a recording of one; step through it.</p>
@@ -82,7 +82,7 @@ function renderChrome(): void {
     </section>
 
     <section class="wrap section" id="privacy">
-      <div class="section-head"><span class="sq magenta"></span><h2 class="mono">Privacy</h2></div>
+      <div class="section-head"><span class="sq white"></span><h2 class="mono">Privacy</h2></div>
       <p class="section-lead">Nothing you do here leaves the page: no account, no server, no AI calls, and
       your session is gone when the tab closes. It searches a 2,000-film sample and tells you when your
       taste points somewhere that sample covers thinly. The only network traffic after load is posters,
@@ -90,7 +90,7 @@ function renderChrome(): void {
     </section>
 
     <section class="wrap section" id="full">
-      <div class="section-head"><span class="sq orange"></span><h2 class="mono">The full version</h2></div>
+      <div class="section-head"><span class="sq white"></span><h2 class="mono">The full version</h2></div>
       <p class="section-lead">The full version searches about 16,000 films and holds a real conversation
       in plain language, keeping a profile that follows your taste as it changes.</p>
       <p class="install">Install it: <code>pipx install cinegeist</code></p>
@@ -123,26 +123,6 @@ function showLoading(): void {
   panel().innerHTML = `
     <div class="panel-head"><span class="sq cyan"></span><span class="mono">Catalog</span></div>
     <div class="loading"><span class="dot"></span> Loading the taste catalog…</div>`;
-}
-
-function showIntro(shard: DecodedShard, onBegin: () => void): void {
-  const decades = new Set(
-    shard.films.map((f) => (f.year ? Math.floor(f.year / 10) * 10 : null)).filter((d) => d !== null),
-  );
-  panel().innerHTML = `
-    <div class="panel-head"><span class="sq cyan"></span><span class="mono">Catalog ready</span></div>
-    <div class="stats">
-      <div class="stat"><div class="num">${shard.nFilms.toLocaleString()}</div>
-        <div class="cap"><span class="sq cyan"></span><span class="mono">Films in this demo</span></div></div>
-      <div class="stat"><div class="num">${decades.size}</div>
-        <div class="cap"><span class="sq magenta"></span><span class="mono">Decades covered</span></div></div>
-      <div class="stat"><div class="num">${shard.fullCatalogSize.toLocaleString()}</div>
-        <div class="cap"><span class="sq orange"></span><span class="mono">In the full version</span></div></div>
-    </div>
-    <p class="note">Answer a handful of this-or-that pairs and CineGeist will find something to watch —
-    then show you why. No question ever repeats a film you've already judged.</p>
-    <div class="controls"><button class="btn btn-accent" data-begin><span class="mono">Begin</span>${chevron}</button></div>`;
-  panel().querySelector("[data-begin]")?.addEventListener("click", onBegin);
 }
 
 function showError(err: unknown): void {
@@ -210,7 +190,7 @@ async function mountChat(mount: HTMLElement): Promise<void> {
     setConversationLive();
     await new LiveChat(mount, backend).start();
   } else {
-    new CannedChat(mount, TRANSCRIPT).render();
+    new CannedChat(mount, TRANSCRIPT, TRANSCRIPT_MODEL).render();
   }
 }
 
@@ -265,7 +245,7 @@ async function main(): Promise<void> {
     }),
   );
 
-  showIntro(shard, begin);
+  conversation.mountInitial();
 }
 
 void main();

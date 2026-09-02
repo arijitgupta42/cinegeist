@@ -76,6 +76,7 @@ export class CannedChat {
   constructor(
     private mount: HTMLElement,
     entries: readonly ChatEntry[],
+    private model?: string,
   ) {
     this.player = new TranscriptPlayer(entries);
   }
@@ -85,10 +86,15 @@ export class CannedChat {
     const controls = this.player.atEnd
       ? `<button class="btn" data-restart><span class="mono">Restart</span></button>`
       : `<button class="btn btn-accent" data-next><span class="mono">Next</span><span class="chev" aria-hidden="true">›</span></button>`;
+    // The recording is a real CLI run, so it names the model that phrased and explained it; the demo
+    // above stays LLM-free. Falls back to the generic line if no model was supplied.
+    const banner = this.model
+      ? `A real run of the full CLI, phrased and explained by ${escapeHtml(this.model)}. The demo above is LLM-free.`
+      : "A recording — the full version's phrased conversation. The demo above is the live one.";
     this.mount.innerHTML = `
       <div class="chat-banner">
         <span class="sq yellow"></span>
-        <span class="mono">A recording — the full version's phrased conversation. The demo above is the live one.</span>
+        <span class="mono">${banner}</span>
       </div>
       <div class="chat-log">${bubbles}</div>
       <div class="chat-controls">

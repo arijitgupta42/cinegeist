@@ -57,6 +57,7 @@ export class Conversation {
   private session: DemoSession;
   private probes: PrecomputedProbe[];
   private pendingProbe: PrecomputedProbe | null = null;
+  private started = false; // false until the visitor begins; React shows the intro (with Begin) meanwhile
   private currentStage: Stage = "react";
   private map: TasteMap | null = null;
   private mapToken = 0; // invalidates in-flight async map mounts when the stage changes
@@ -76,8 +77,16 @@ export class Conversation {
     );
   }
 
-  /** Begin (or resume) the conversation at the React stage. */
+  /** Render the initial view — the intro, with its Begin button — without beginning yet. Call once
+   *  after construction. The strip is live from here, so the intro is also what React returns to if
+   *  the visitor flips to another tab and back before beginning. */
+  mountInitial(): void {
+    this.goToStage("react");
+  }
+
+  /** Begin the conversation at the React stage. Safe to call again; beginning is idempotent. */
   start(): void {
+    this.started = true;
     this.goToStage("react");
   }
 
@@ -85,6 +94,7 @@ export class Conversation {
   restart(): void {
     this.session.clear();
     this.pendingProbe = null;
+    this.started = true;
     this.goToStage("react");
   }
 
@@ -125,6 +135,10 @@ export class Conversation {
   // -- React -------------------------------------------------------------------------
 
   private renderReact(): void {
+    // Not begun yet: React is the intro (catalog stats + Begin). This is the state the strip returns
+    // to if the visitor peeks at another tab before starting — without it, coming back to React would
+    // drop them straight into the first question with no way back to Begin.
+    if (!this.started) return this.renderIntro();
     if (!this.pendingProbe) this.pendingProbe = this.nextProbe();
     if (this.pendingProbe) return this.renderProbe(this.pendingProbe);
     // Out of useful questions but the visitor is still on React: point them at their picks rather
@@ -133,6 +147,31 @@ export class Conversation {
       <div class="panel-head"><span class="sq green"></span><span class="mono">React</span></div>
       <p class="note">That's every pair the demo catalog has to separate your taste. Your picks are ready.</p>
       <div class="controls"><button class="btn btn-accent" data-go="recommend"><span class="mono">See your picks</span>${CHEV}</button></div>`;
+    this.wireNav();
+  }
+
+  // The pre-start view: catalog stats and the Begin button. It's the React stage's not-yet-begun
+  // state, so it renders here rather than in the page shell — that's what lets the strip flip away
+  // and back to it before the visitor commits (plan.md §8.2).
+  private renderIntro(): void {
+    const decades = new Set(
+      this.shard.films.map((f) => (f.year ? Math.floor(f.year / 10) * 10 : null)).filter((d) => d !== null),
+    );
+    // The intro is a threshold, not a stage view, so suppress the per-stage blurb until they begin.
+    this.blurb.hidden = true;
+    this.mount.innerHTML = `
+      <div class="panel-head"><span class="sq cyan"></span><span class="mono">Catalog ready</span></div>
+      <div class="stats">
+        <div class="stat"><div class="num">${this.shard.nFilms.toLocaleString()}</div>
+          <div class="cap"><span class="sq cyan"></span><span class="mono">Films in this demo</span></div></div>
+        <div class="stat"><div class="num">${decades.size}</div>
+          <div class="cap"><span class="sq magenta"></span><span class="mono">Decades covered</span></div></div>
+        <div class="stat"><div class="num">${this.shard.fullCatalogSize.toLocaleString()}</div>
+          <div class="cap"><span class="sq orange"></span><span class="mono">In the full version</span></div></div>
+      </div>
+      <p class="note">Answer a handful of this-or-that pairs and CineGeist will find something to watch —
+      then show you why. No question ever repeats a film you've already judged.</p>
+      <div class="controls"><button class="btn btn-accent" data-begin><span class="mono">Begin</span>${CHEV}</button></div>`;
     this.wireNav();
   }
 
@@ -380,7 +419,7 @@ export class Conversation {
     this.mount.innerHTML = `
       <div class="panel-head"><span class="sq ${sq}"></span><span class="mono">${label}</span></div>
       <p class="note">React to a few pairs first, and ${what} will appear here.</p>
-      <div class="controls"><button class="btn btn-accent" data-go="react"><span class="mono">Start reacting</span>${CHEV}</button></div>`;
+      <div class="controls"><button class="btn btn-accent" data-begin><span class="mono">Start reacting</span>${CHEV}</button></div>`;
     this.wireNav();
   }
 
@@ -495,6 +534,7 @@ export class Conversation {
     this.mount.querySelectorAll<HTMLElement>("[data-go]").forEach((b) =>
       b.addEventListener("click", () => this.goToStage(b.dataset.go as Stage)),
     );
+    this.mount.querySelector("[data-begin]")?.addEventListener("click", () => this.start());
     this.mount.querySelector("[data-restart]")?.addEventListener("click", () => this.restart());
     this.mount.querySelector("[data-export]")?.addEventListener("click", () => this.exportSession());
   }

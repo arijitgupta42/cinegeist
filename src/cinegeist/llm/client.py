@@ -217,8 +217,12 @@ class OpenRouterClient:
             text = choice["message"]["content"]
         except (KeyError, IndexError, ValueError, TypeError) as error:
             raise LLMError(self._redact(f"Malformed response from '{model}': {error}")) from error
+        # Some models return JSON null for content (a reasoning model that spent its budget
+        # thinking, or an empty completion). ``text`` is typed ``str`` and every caller does
+        # ``.strip()``/``json.loads`` on it, so coerce null to "" — the turn then degrades
+        # gracefully (a retry, or the deterministic fallback) rather than crashing the conversation.
         return ChatResult(
-            text=text,
+            text=text if isinstance(text, str) else "",
             model=data.get("model", model),
             finish_reason=choice.get("finish_reason"),
         )
