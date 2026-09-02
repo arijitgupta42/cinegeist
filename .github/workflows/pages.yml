@@ -4,15 +4,16 @@ name: Publish the demo to GitHub Pages
 # on for the repository (Settings → Pages → Source: "GitHub Actions"). On the free plan that also
 # means the repository has to be public; a private repo needs a paid plan for Pages.
 #
-# The repo is deliberately kept private for now, so this runs on manual dispatch only and stays
-# dormant — nothing deploys until someone runs it. Once Pages is enabled, add an automatic trigger:
-#
-#   push:
-#     branches: [main]
-#     paths: ["web/**", ".github/workflows/pages.yml"]
+# The repo is public and Pages is enabled, so this deploys automatically on every push to main that
+# touches the demo (or this workflow), and can still be triggered by hand from the Actions tab.
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - ".github/workflows/pages.yml"
 
 # Let the deploy publish to Pages via OIDC, and read the repo to build it.
 permissions:

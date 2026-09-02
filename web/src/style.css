@@ -21,12 +21,20 @@
   --ink-dim: #8b8b92;
   --ink-faint: #5b5b62;
 
-  /* accents — the exact plasticity palette */
+  /* accents — the exact plasticity palette. These four are the pipeline stages (React/Learn/
+     Recommend/Explain) and mean only that; don't reuse them for page chrome. */
   --cyan: #3fd2fb;
   --green: #68ff21;
   --magenta: #f365ff;
   --orange: #ff7121;
   --yellow: #ffb801;
+
+  /* secondary palette — page chrome (the top-nav links and their section headers). Kept clear of the
+     four stage hues above so navigation reads as its own system rather than echoing the tab strip. */
+  --amber: #ffc24b;
+  --blue: #5b8dff;
+  --violet: #b57bff;
+  --rose: #ff6f91;
 
   --accent: var(--cyan);
 
@@ -99,6 +107,18 @@ a {
 }
 .sq.yellow {
   background: var(--yellow);
+}
+.sq.amber {
+  background: var(--amber);
+}
+.sq.blue {
+  background: var(--blue);
+}
+.sq.violet {
+  background: var(--violet);
+}
+.sq.rose {
+  background: var(--rose);
 }
 .sq.white {
   background: var(--ink);
@@ -187,16 +207,30 @@ a {
   border: 1px solid transparent;
   transition: border-color 0.15s ease, background 0.15s ease;
 }
+/* each nav link carries its section's chrome accent — the same colour as its square — so hovering
+   tints the button with that colour rather than a flat grey. */
+.nav-link[href="#how"] {
+  --link-color: var(--amber);
+}
+.nav-link[href="#conversation"] {
+  --link-color: var(--blue);
+}
+.nav-link[href="#privacy"] {
+  --link-color: var(--violet);
+}
+.nav-link[href="#full"] {
+  --link-color: var(--rose);
+}
 /* the section currently under the viewport's top edge (main.ts scroll-spy) */
 .nav-link.active {
   border-color: var(--line-strong);
   background: var(--surface-2);
 }
-/* hover lifts the button with a soft neutral wash — declared after .active so it wins when a link is
- * both hovered and the active section (the two selectors have equal specificity). */
+/* hover lifts the button with a wash of its own accent — declared after .active so it wins when a
+ * link is both hovered and the active section (the two selectors have equal specificity). */
 .nav-link:hover {
-  background: color-mix(in srgb, var(--ink) 12%, var(--surface-3));
-  border-color: var(--line-strong);
+  background: color-mix(in srgb, var(--link-color, var(--ink)) 15%, var(--surface-3));
+  border-color: color-mix(in srgb, var(--link-color, var(--ink)) 50%, var(--line-strong));
 }
 .nav-link .mono {
   font-size: 0.68rem;
