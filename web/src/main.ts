@@ -8,6 +8,7 @@ import { clearShardCache, loadProbes, loadShard, type DecodedShard, type ProbesF
 import { Conversation } from "./conversation.ts";
 import { CannedChat } from "./chat.ts";
 import { TRANSCRIPT } from "./transcript.ts";
+import { detectBackend, LiveChat } from "./live.ts";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 
@@ -74,9 +75,9 @@ function renderChrome(): void {
 
     <section class="wrap section" id="conversation">
       <div class="section-head"><span class="sq cyan"></span><h2 class="mono">A full conversation</h2></div>
-      <p class="section-lead">The demo above is the live recommender with the words stripped out. The full
-      version keeps the words — it phrases every question, reads your answers in plain language, and
-      explains the picks. Here's a recording of one; step through it.</p>
+      <p class="section-lead" id="conversation-lead">The demo above is the live recommender with the words
+      stripped out. The full version keeps the words — it phrases every question, reads your answers in
+      plain language, and explains the picks. Here's a recording of one; step through it.</p>
       <div class="chat" id="chat"></div>
     </section>
 
@@ -199,12 +200,35 @@ function setupScrollSpy(): void {
   sections.forEach((section) => observer.observe(section));
 }
 
+// The conversation section plays a recording by default. If a local backend is serving this page
+// (`cinegeist serve`), it becomes the real, live conversation instead — the public Pages build has no
+// backend, so detectBackend() returns null and the recording plays (plan.md §10, session 8).
+async function mountChat(mount: HTMLElement): Promise<void> {
+  mount.innerHTML = `<div class="chat-log"><div class="loading"><span class="dot"></span> Connecting…</div></div>`;
+  const backend = await detectBackend();
+  if (backend) {
+    setConversationLive();
+    await new LiveChat(mount, backend).start();
+  } else {
+    new CannedChat(mount, TRANSCRIPT).render();
+  }
+}
+
+function setConversationLive(): void {
+  const lead = document.querySelector<HTMLElement>("#conversation-lead");
+  if (lead) {
+    lead.textContent =
+      "You're running the full version, so this is the real conversation — you answer in plain " +
+      "language, it phrases the questions and explains the picks, all served by the backend on this machine.";
+  }
+}
+
 async function main(): Promise<void> {
   renderChrome();
   setupScrollSpy();
 
   const chatMount = app.querySelector<HTMLElement>("#chat");
-  if (chatMount) new CannedChat(chatMount, TRANSCRIPT).render();
+  if (chatMount) void mountChat(chatMount);
 
   app.querySelector("[data-clear]")?.addEventListener("click", async () => {
     try {
