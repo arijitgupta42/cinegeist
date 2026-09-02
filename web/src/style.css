@@ -187,13 +187,16 @@ a {
   border: 1px solid transparent;
   transition: border-color 0.15s ease, background 0.15s ease;
 }
-.nav-link:hover {
-  border-color: var(--line-strong);
-}
 /* the section currently under the viewport's top edge (main.ts scroll-spy) */
 .nav-link.active {
   border-color: var(--line-strong);
   background: var(--surface-2);
+}
+/* hover lifts the button with a soft neutral wash — declared after .active so it wins when a link is
+ * both hovered and the active section (the two selectors have equal specificity). */
+.nav-link:hover {
+  background: color-mix(in srgb, var(--ink) 12%, var(--surface-3));
+  border-color: var(--line-strong);
 }
 .nav-link .mono {
   font-size: 0.68rem;
@@ -906,8 +909,15 @@ main {
   flex-direction: column;
   gap: 0.7rem;
   padding: 1.25rem;
-  max-height: 460px;
+  /* Fixed, not max-height: the box must not grow as Next reveals more turns, or the controls below
+   * it (the Next button) would slide down under the cursor between clicks. */
+  height: 460px;
   overflow-y: auto;
+}
+/* Anchor the turns to the bottom so the early steps don't leave a gap beneath the last bubble; when
+ * the log overflows, the auto margin collapses and it scrolls normally (chat.ts pins it to bottom). */
+.chat-log > :first-child {
+  margin-top: auto;
 }
 .chat-row {
   display: flex;

@@ -64,6 +64,20 @@ def test_chat_returns_the_message_content() -> None:
     assert result.finish_reason == "stop"
 
 
+def test_null_content_becomes_empty_string() -> None:
+    # Some models return a JSON null for content (a reasoning model out of budget, or an empty
+    # completion). It must not crash the caller (every one does .strip()/json.loads on the text),
+    # so the client coerces null to "" and the turn degrades gracefully instead.
+    def handler(_request: httpx.Request) -> httpx.Response:
+        body = ok_body()
+        body["choices"][0]["message"]["content"] = None
+        return httpx.Response(200, json=body)
+
+    result = client_for(handler).chat([{"role": "user", "content": "hi"}])
+    assert result.text == ""
+    assert result.model == "test-model"
+
+
 def test_authorization_header_carries_the_key() -> None:
     seen: dict[str, str] = {}
 

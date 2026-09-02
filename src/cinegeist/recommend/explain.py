@@ -31,7 +31,9 @@ from .score import ScoredFilm
 
 _PROMPT_NAME = "explain"
 _MAX_ATTEMPTS = 2
-_MAX_TOKENS = 400
+# Room for one or two textured sentences per pick (the prompt asks the model to vary its angle),
+# with headroom so a verbose model isn't truncated into invalid JSON before the closing brace.
+_MAX_TOKENS = 600
 _RETRY_NUDGE = (
     "Your previous reply was not valid JSON ({error}). Reply with ONLY a JSON object mapping "
     'each id (as a string) to one sentence, e.g. {{"12": "..."}}.'
@@ -39,9 +41,11 @@ _RETRY_NUDGE = (
 
 # A pick "shares" a profile tag when it loads at least this strongly on that tag's axis.
 EXPLAIN_TAG_RELEVANCE = 0.5
-# How many shared tags / quotes to hand the phrasing, per pick — enough to be specific, not a list.
-_MAX_TAGS = 3
-_MAX_QUOTES = 1
+# How many shared tags / quotes to hand the phrasing, per pick. A little generous so the model has
+# distinct material to differentiate picks with — several tags to lead on, and every quote the pick
+# earned rather than only the top one (which is the same across picks and drives repetition).
+_MAX_TAGS = 4
+_MAX_QUOTES = 3
 _QUOTE_CHARS = 90  # trim a rambling quote so the sentence stays a sentence
 
 _LEADING_FENCE_RE = re.compile(r"^```[a-zA-Z0-9]*\n?")
@@ -174,7 +178,11 @@ def _pick_line(pick: PickEvidence) -> str:
         line += " — wildcard"
     line += f" — shares: {tag_part}"
     if pick.quotes:
-        line += f' — they said: "{pick.quotes[0]}"'
+        # Hand over every quote the pick earned, not just the first — the first is often the same
+        # across picks, so a model given only that repeats it. With several, the prompt can spread
+        # a different one over each pick.
+        quoted = "; ".join(f'"{q}"' for q in pick.quotes)
+        line += f" — they said: {quoted}"
     else:
         line += " — (no quote)"
     return line
