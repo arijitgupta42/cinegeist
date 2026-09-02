@@ -174,6 +174,7 @@ def test_load_vector_reuses_a_valid_snapshot(catalog) -> None:
         event_count=1,
         total_weight=2.0,
         vector=np.array([7.0, 7.0, 7.0], dtype=np.float32),
+        vector_version=update.MASK_VERSION,
     )
     vector, total_weight = update.load_vector(conn, matrix, now=AT)
     assert np.allclose(vector, [7.0, 7.0, 7.0])
@@ -190,6 +191,7 @@ def test_load_vector_decays_total_weight_forward(catalog) -> None:
         event_count=1,
         total_weight=2.0,
         vector=np.array([1.0, 0.0, 0.0], dtype=np.float32),
+        vector_version=update.MASK_VERSION,
     )
     later = AT + timedelta(days=update.HALF_LIFE_DAYS)
     vector, total_weight = update.load_vector(conn, matrix, now=later)
@@ -208,6 +210,55 @@ def test_load_vector_recomputes_on_a_count_mismatch(catalog) -> None:
         event_count=5,
         total_weight=2.0,
         vector=np.array([7.0, 7.0, 7.0], dtype=np.float32),
+        vector_version=update.MASK_VERSION,
     )
     vector, _ = update.load_vector(conn, matrix, now=AT)
     assert np.allclose(vector, TOY_STORY, atol=1e-6)  # recomputed from the log
+
+
+# -- excluding non-content (reception / verdict) tags --------------------------------
+
+
+def test_excluded_tags_never_steer_the_centroid_or_rank_as_an_axis() -> None:
+    # A three-tag catalog whose middle column is a verdict tag ('masterpiece'), not content.
+    conn = db.connect(":memory:")
+    db.migrate(conn)
+    conn.executemany(
+        "INSERT INTO genome_tags (tag_id, position, name) VALUES (?, ?, ?)",
+        [(10, 0, "atmospheric"), (20, 1, "masterpiece"), (30, 2, "slow")],
+    )
+    conn.execute(
+        "INSERT INTO movies (movie_id, title, clean_title, year, genome_row, genome_source) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (1, "A Film (2000)", "A Film", 2000, 0, "measured"),
+    )
+    conn.commit()
+    # The film loads most strongly on the excluded column, yet it must not survive into the profile.
+    matrix = np.array([[0.4, 0.9, 0.3]], dtype=np.float32)
+    store.append_event(conn, PreferenceEvent.liked_movie(1, evidence="a masterpiece"), now=AT)
+    profile = update.compute_profile(conn, matrix, now=AT)
+
+    assert profile.genome_vector[1] == pytest.approx(0.0)  # 'masterpiece' zeroed
+    assert profile.genome_vector[0] == pytest.approx(0.4)  # content tags left untouched
+    assert profile.genome_vector[2] == pytest.approx(0.3)
+    assert "masterpiece" not in [a.name for a in profile.axes]  # never a ranked axis
+    # The like is still evidence — only its excluded direction is dropped, not its weight.
+    assert profile.total_weight == pytest.approx(1.0)
+
+
+def test_load_vector_rejects_a_snapshot_from_an_older_mask_version(catalog) -> None:
+    conn, matrix = catalog
+    store.append_event(conn, PreferenceEvent.liked_movie(1), now=AT)  # invalidates any snapshot
+    # A sentinel whose event_count matches but which predates the current masking scheme: a reader
+    # must not reuse its (possibly un-masked) vector, and recomputes from the log instead.
+    store.write_snapshot(
+        conn,
+        store.DEFAULT_USER,
+        computed_at=AT,
+        event_count=1,
+        total_weight=2.0,
+        vector=np.array([7.0, 7.0, 7.0], dtype=np.float32),
+        vector_version=update.MASK_VERSION - 1,
+    )
+    vector, _ = update.load_vector(conn, matrix, now=AT)
+    assert np.allclose(vector, TOY_STORY, atol=1e-6)  # recomputed, not the stale sentinel

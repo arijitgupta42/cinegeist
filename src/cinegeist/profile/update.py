@@ -25,11 +25,18 @@ from datetime import UTC, datetime
 
 import numpy as np
 
+from ..catalog.excluded_tags import excluded_positions
 from . import store
 from .model import PreferenceEvent, TagAffinity, TasteProfile
 
 # Default half-life for the decay: evidence loses half its weight every 270 days.
 HALF_LIFE_DAYS = 270.0
+
+# The id of the current tag-masking scheme (which genome columns are zeroed out of the centroid,
+# see excluded_tags.py). It travels with every cached snapshot; a reader reuses a snapshot only
+# when this id still matches, so changing what we mask means bumping this to discard stale vectors.
+# Bump whenever the excluded-tag set or the masking behaviour changes.
+MASK_VERSION = 1
 
 # How many axes per sign to keep (with attributed evidence) for display and explanation.
 _AXES_PER_SIGN = 15
@@ -55,6 +62,24 @@ def _age_days(then: datetime, now: datetime) -> float:
 # One event's contribution to the centroid: its signed decayed weight, the unit/genome vector it
 # acts on, the event itself (for evidence), and a short label of where it came from.
 _Contribution = tuple[float, np.ndarray, PreferenceEvent, str]
+
+
+def _mask_excluded(conn: sqlite3.Connection, centroid: np.ndarray) -> None:
+    """Zero the non-content (reception/verdict) tag columns of the centroid, in place.
+
+    A chunk of the genome describes a film's *standing* — curation lists (``imdb top 250``,
+    ``criterion``), awards, ``cult``, and quality verdicts (``masterpiece``, ``boring``) — rather
+    than its character. Two films sharing one are both well-regarded, not alike in any way a viewer
+    picking what to watch cares about, yet left in they would steer the cosine and surface as a
+    ranked axis with a disingenuous explanation. Applied here, at the one place the centroid is
+    formed, so both ``compute_profile`` and the vector it caches for the recommender are masked.
+    See :mod:`cinegeist.catalog.excluded_tags`; the browser demo masks the same set at shard-build
+    time. ``total_weight`` is deliberately untouched — a liked film is still evidence, only its
+    excluded directions are dropped.
+    """
+    positions = excluded_positions(conn)
+    if positions:
+        centroid[list(positions)] = 0.0
 
 
 def _resolve_movie_vectors(
@@ -132,6 +157,7 @@ def _accumulate(
         contributions.append((w, vector, event, source))
 
     centroid = numerator / total_weight if total_weight > 0 else numerator
+    _mask_excluded(conn, centroid)
     return centroid, total_weight, contributions
 
 
@@ -216,6 +242,7 @@ def compute_profile(
         event_count=event_count,
         total_weight=total_weight,
         vector=centroid,
+        vector_version=MASK_VERSION,
     )
     axes = _rank_axes(conn, centroid, contributions)
     return TasteProfile(
@@ -241,12 +268,15 @@ def load_vector(
 
     The snapshot is invalidated on every write, so an existing one whose ``event_count`` still
     matches the log is exact: the centroid is reused as-is and ``total_weight`` is decayed
-    forward to ``now`` by a single scalar. Otherwise the profile is recomputed (and re-cached).
+    forward to ``now`` by a single scalar. A snapshot from an older masking scheme
+    (``vector_version`` mismatch) is treated as stale and recomputed, so a cached *un*-masked
+    vector is never reused. Otherwise the profile is recomputed (and re-cached).
     """
     now = now or store.now_utc()
     snapshot = store.read_snapshot(conn, user_id)
     if (
         snapshot is not None
+        and snapshot.vector_version == MASK_VERSION
         and snapshot.event_count == store.count_events(conn, user_id)
         and snapshot.vector.shape[0] == int(matrix.shape[1])
     ):

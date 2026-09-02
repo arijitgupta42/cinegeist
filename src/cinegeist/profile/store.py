@@ -192,12 +192,13 @@ class Snapshot:
     event_count: int
     total_weight: float
     vector: np.ndarray
+    vector_version: int
 
 
 def read_snapshot(conn: sqlite3.Connection, user_id: str = DEFAULT_USER) -> Snapshot | None:
     """The cached snapshot for a user, or ``None`` if none is stored."""
     row = conn.execute(
-        "SELECT computed_at, event_count, total_weight, genome_vector "
+        "SELECT computed_at, event_count, total_weight, genome_vector, vector_version "
         "FROM profile_snapshots WHERE user_id = ?",
         (user_id,),
     ).fetchone()
@@ -209,6 +210,7 @@ def read_snapshot(conn: sqlite3.Connection, user_id: str = DEFAULT_USER) -> Snap
         event_count=int(row["event_count"]),
         total_weight=float(row["total_weight"]),
         vector=vector,
+        vector_version=int(row["vector_version"]),
     )
 
 
@@ -220,22 +222,29 @@ def write_snapshot(
     event_count: int,
     total_weight: float,
     vector: np.ndarray,
+    vector_version: int,
 ) -> None:
-    """Cache a freshly computed centroid, replacing any earlier snapshot for the user."""
+    """Cache a freshly computed centroid, replacing any earlier snapshot for the user.
+
+    ``vector_version`` records which masking scheme produced the vector (see
+    :data:`cinegeist.profile.update.MASK_VERSION`); a reader reuses a snapshot only when that id
+    still matches, so a bump discards every centroid computed under an older scheme.
+    """
     blob = np.asarray(vector, dtype=_BLOB_DTYPE).tobytes()
     with conn:
         conn.execute(
             """
             INSERT INTO profile_snapshots
-                (user_id, computed_at, event_count, total_weight, genome_vector)
-            VALUES (?, ?, ?, ?, ?)
+                (user_id, computed_at, event_count, total_weight, genome_vector, vector_version)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT (user_id) DO UPDATE SET
                 computed_at = excluded.computed_at,
                 event_count = excluded.event_count,
                 total_weight = excluded.total_weight,
-                genome_vector = excluded.genome_vector
+                genome_vector = excluded.genome_vector,
+                vector_version = excluded.vector_version
             """,
-            (user_id, _to_iso(computed_at), event_count, total_weight, blob),
+            (user_id, _to_iso(computed_at), event_count, total_weight, blob, vector_version),
         )
 
 
