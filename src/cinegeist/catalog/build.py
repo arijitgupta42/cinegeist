@@ -31,13 +31,14 @@ from rich.progress import (
 
 from ..config import Settings, load_settings
 from ..config import data_dir as default_data_dir
-from . import genome
+from . import genome, predict
 from .db import get_state, open_catalog, set_state
 from .sources import movielens, tmdb
 
 # build_state keys marking each stage complete (value is an ISO timestamp).
 _INGESTED_KEY = "movielens_ingested_at"
 _GENOME_KEY = "genome_built_at"
+_PREDICTED_KEY = "genome_predicted_at"
 
 
 def _now() -> str:
@@ -51,6 +52,7 @@ def build_catalog(
     url: str = movielens.DEFAULT_URL,
     settings: Settings | None = None,
     enrich: bool = True,
+    predict_missing: bool = True,
     tmdb_scope: str = "measured",
     tmdb_region: str = "US",
     tmdb_limit: int | None = None,
@@ -83,6 +85,8 @@ def build_catalog(
                 limit=tmdb_limit,
                 concurrency=tmdb_concurrency,
             )
+        if predict_missing:
+            _stage_predict(conn, data_dir, console, force=force)
         console.print("[green]Catalog build complete.[/green]")
     finally:
         conn.close()
@@ -174,10 +178,12 @@ def _stage_genome(
             "INSERT INTO genome_tags (tag_id, position, name) VALUES (?, ?, ?)",
             [(tag_id, positions[tag_id], name) for tag_id, name in tags],
         )
-        # A rebuild starts from a clean slate so no stale row indices survive a shrink.
+        # A rebuild starts from a clean slate so no stale row indices survive a shrink. This clears
+        # predicted rows too: the memmap is rewritten from scratch below, so any appended predicted
+        # vectors are gone and their films must be re-predicted (the predict stage does that).
         conn.execute(
             "UPDATE movies SET genome_row = NULL, genome_source = 'none' "
-            "WHERE genome_source = 'measured'"
+            "WHERE genome_source IN ('measured', 'predicted')"
         )
 
     known_movies = {row[0] for row in conn.execute("SELECT movie_id FROM movies")}
@@ -245,3 +251,36 @@ def _stage_tmdb(
         concurrency=concurrency,
         console=console,
     )
+
+
+def _stage_predict(
+    conn: sqlite3.Connection, data_dir: Path, console: Console, *, force: bool
+) -> None:
+    """Predict genome vectors for featured-but-uncovered films (plan.md §2.2)."""
+    if not force and get_state(conn, _PREDICTED_KEY):
+        console.print("[dim]Predicted vectors already filled in; skipping.[/dim]")
+        return
+    genome_path = genome.default_genome_path(data_dir)
+    if not genome_path.exists():
+        return  # no measured genome to learn from yet
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        TimeElapsedColumn(),
+        console=console,
+    ) as progress:
+        progress.add_task("Predicting vectors for uncovered films", total=None)
+        result = predict.predict_missing(conn, genome_path)
+
+    if result.predicted:
+        console.print(
+            f"[green]Predicted {result.predicted:,} vectors[/green] from "
+            f"{result.trained_on:,} measured films over {result.n_features:,} TMDB features."
+        )
+    else:
+        console.print(
+            "[dim]No films to predict — every genome-less film lacks TMDB features "
+            "(enrich the catalog first to fill these in).[/dim]"
+        )
+    set_state(conn, _PREDICTED_KEY, _now())

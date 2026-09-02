@@ -104,6 +104,7 @@ locally. `--data-dir PATH` points any command at a catalog outside the default `
 |---|---|
 | `cinegeist catalog build` | Download MovieLens and build `data/cinegeist.db` and `data/genome.npy`. Resumable. |
 | `cinegeist catalog build --skip-enrich` | Build the genome only; skip the TMDB stage. |
+| `cinegeist catalog build --skip-predict` | Skip predicting genome vectors for films the tag genome doesn't cover but TMDB does. |
 | `cinegeist catalog enrich` | Fetch keywords, credits, countries, and providers from TMDB. Concurrent and resumable. |
 | `cinegeist catalog enrich --scope all` | Enrich every film, not just the genome-covered ones. |
 
