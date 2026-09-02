@@ -11,7 +11,7 @@ else
 endif
 
 .PHONY: setup lint format test test-network check catalog catalog-refresh spec web-shard \
-	web-install web-test web-build web-dev
+	web-install web-test web-build web-dev eval
 
 setup:  ## create the venv, install the package (with dev extras), install the git hook
 	$(PY) -m venv $(VENV)
@@ -30,6 +30,9 @@ format:  ## auto-format and auto-fix
 
 test:  ## unit tests, no network
 	$(BIN)/pytest
+
+eval:  ## score the recommender against synthetic personas (precision@3); no catalog or key needed
+	$(BIN)/cinegeist eval
 
 test-network:  ## integration tests that reach real APIs
 	$(BIN)/pytest -m network

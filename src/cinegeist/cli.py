@@ -206,6 +206,75 @@ def chat(
         conn.close()
 
 
+@app.command("eval")
+def evaluate(
+    seed: int = typer.Option(
+        0, "--seed", help="Seed for the synthetic catalog; the run is deterministic in it."
+    ),
+    verbose: bool = typer.Option(
+        False, "--verbose", "-v", help="Also print each persona's pair-question transcript."
+    ),
+) -> None:
+    """Score the recommender against synthetic personas and report precision@3.
+
+    Builds a small catalog with known ground truth, runs each persona through the offline engine,
+    and measures how many of its three confident picks land in the taste it was built to have. No
+    real catalog and no API key needed — it is self-contained and deterministic, so the number
+    moves only when the recommender does. Tune a weight in the scorer and watch it here.
+    """
+    from .eval import run_eval
+
+    report = run_eval(seed=seed)
+    _render_eval(report, verbose=verbose)
+
+
+def _render_eval(report, *, verbose: bool) -> None:
+    """Print the precision table, the headline mean, and (optionally) the persona transcripts."""
+    from collections import Counter
+
+    table = Table(title=f"Recommender precision on {len(report.results)} synthetic personas")
+    for name, justify in (
+        ("Persona", "left"),
+        ("Loves", "left"),
+        ("Bounces off", "left"),
+        ("Probes", "right"),
+        ("Picks land in", "left"),
+        ("p@3", "right"),
+    ):
+        table.add_column(name, justify=justify)
+
+    for res in report.results:
+        counts = Counter(res.pick_clusters)
+        lands = ", ".join(f"{cluster} ×{n}" for cluster, n in counts.most_common()) or "—"
+        precision = res.precision_at_3
+        colour = "green" if precision >= 0.99 else "yellow" if precision >= 0.5 else "red"
+        table.add_row(
+            res.persona.name,
+            res.persona.loved,
+            res.persona.hated or "—",
+            str(res.n_probes),
+            lands,
+            f"[{colour}]{precision:.2f}[/{colour}]",
+        )
+    console.print(table)
+    console.print(
+        f"\n[bold]Mean precision@3: {report.mean_precision_at_3:.3f}[/bold] "
+        f"[dim]across {len(report.results)} personas · {report.catalog_size} films · "
+        f"seed {report.seed}[/dim]"
+    )
+    if verbose:
+        for res in report.results:
+            console.print(
+                f"\n[bold]{res.persona.name}[/bold] [dim]— {res.persona.description}[/dim]"
+            )
+            for turn in res.probe_turns:
+                console.print(
+                    f"  [cyan]{turn.high_label}[/cyan] or [cyan]{turn.low_label}[/cyan] "
+                    f"→ chose {turn.chosen_label}"
+                )
+            console.print(f"  [dim]picks:[/dim] {', '.join(res.pick_titles) or '—'}")
+
+
 catalog_app = typer.Typer(
     no_args_is_help=True,
     help="Build and maintain the local movie catalog (SQLite + the genome memmap).",
