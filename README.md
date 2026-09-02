@@ -15,6 +15,7 @@ browser demo are in place.
 
 - Try it with no install and no key: the [browser demo](#browser-demo) in [`web/`](web/).
 - Prefer the terminal: [`cinegeist chat`](#quickstart). It works offline too (`--offline`).
+- Want the full conversation in a browser: [`cinegeist serve`](#browser-demo) hosts it locally.
 
 ## Contents
 
@@ -88,6 +89,7 @@ locally. `--data-dir PATH` points any command at a catalog outside the default `
 | `cinegeist chat` | The main experience: react to film pairs, get 3 picks + 1 wildcard with reasons. |
 | `cinegeist chat --offline` | The same recommender with no LLM calls and fixed phrasing; works without a key. |
 | `cinegeist chat -m <model>` | Pin a specific OpenRouter model instead of auto-selecting a free one. |
+| `cinegeist serve` | Hold the same conversation behind a local web UI (`localhost:8765`) — the browser demo's full mode. Localhost only; your catalog and key stay on your machine. |
 
 ### Inspect and correct your taste
 
@@ -154,6 +156,21 @@ npm run build                   # the static bundle the Pages workflow ships
 
 The demo needs a built shard in `web/public/shard`; one is committed, and `make web-shard`
 regenerates it from a local catalog.
+
+The demo also has a **conversation view**. On the public site it's a recorded walkthrough you step
+through — what the phrased, free-text conversation feels like, which is the one part the demo can't
+compute without an LLM. Serve the same page from a local backend and that view goes live:
+
+```bash
+cd web && npm run build         # once, to build the frontend
+cinegeist serve --web-dir web/dist
+```
+
+`cinegeist serve` runs the real recommender behind a small HTTP API on `localhost` and hosts the
+built frontend, so the page holds the whole conversation — free text, phrased questions, real
+explanations — with your catalog, profile, and key never leaving your machine. The public bundle
+still ships no key and makes no LLM calls; full mode only ever runs against a backend you start
+yourself.
 
 ## Development
 
