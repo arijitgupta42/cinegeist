@@ -112,6 +112,7 @@ locally. `--data-dir PATH` points any command at a catalog outside the default `
 | Command | What it does |
 |---|---|
 | `cinegeist search "bleak cerebral 90s"` | Rank catalog films by tag-genome similarity to your phrase. No LLM, no profile. |
+| `cinegeist eval` | Score the recommender against synthetic personas and print precision@3. Self-contained — no catalog or key. `--seed` for a different fixture, `--verbose` for the transcripts. |
 | `cinegeist models --free` | List OpenRouter models that are free right now, best first (`--refresh` to skip the cache). |
 | `cinegeist ask "hi"` | Send one message to a free model and print the reply (needs a key). |
 | `cinegeist config` | Show the effective settings. Keys appear only as set / not set, never printed. |
