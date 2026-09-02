@@ -190,6 +190,11 @@ a {
 .nav-link:hover {
   border-color: var(--line-strong);
 }
+/* the section currently under the viewport's top edge (main.ts scroll-spy) */
+.nav-link.active {
+  border-color: var(--line-strong);
+  background: var(--surface-2);
+}
 .nav-link .mono {
   font-size: 0.68rem;
 }
@@ -824,6 +829,89 @@ main {
   color: var(--ink);
 }
 
+/* -- content sections (how it works / privacy / full version) ---------------------- */
+
+.section {
+  padding: 3rem 1.25rem;
+  border-top: 1px solid var(--hairline);
+  scroll-margin-top: 1.25rem; /* a comfortable gap above the heading when jumped to */
+}
+.section-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+.section-head h2 {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+}
+.section-lead {
+  margin: 0 0 1rem;
+  max-width: 68ch;
+  color: var(--ink-dim);
+  font-size: 0.98rem;
+  line-height: 1.55;
+}
+.section-lead:last-child {
+  margin-bottom: 0;
+}
+.section code {
+  font-family: var(--mono);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.15rem 0.45rem;
+  color: var(--ink);
+}
+.install {
+  margin: 1rem 0 0;
+  color: var(--ink-dim);
+  font-size: 0.9rem;
+}
+.steps {
+  list-style: none;
+  margin: 1.25rem 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.75rem;
+}
+.steps li {
+  position: relative;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 1rem;
+}
+.steps b {
+  display: block;
+  margin: 0.6rem 0 0.4rem;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--ink);
+}
+.steps p {
+  margin: 0;
+  color: var(--ink-dim);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+.steps .step {
+  position: absolute;
+  top: 0.9rem;
+  right: 0.95rem;
+  color: var(--ink-faint);
+  font-size: 0.7rem;
+}
+
 /* -- footer ------------------------------------------------------------------------ */
 
 .foot {
@@ -839,12 +927,6 @@ main {
   border-radius: 4px;
   padding: 0.15rem 0.45rem;
   color: var(--ink);
-}
-.foot .row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem 2rem;
-  align-items: baseline;
 }
 .foot .attrib {
   margin-top: 1rem;
@@ -897,6 +979,9 @@ main {
   }
   .seg:nth-child(2) {
     border-right: 0;
+  }
+  .steps {
+    grid-template-columns: repeat(2, 1fr);
   }
   .stats {
     gap: 1.5rem;
