@@ -121,6 +121,7 @@ def _write_a_snapshot(conn: sqlite3.Connection, count: int = 1) -> None:
         event_count=count,
         total_weight=3.0,
         vector=np.array([0.1, 0.2, 0.3], dtype=np.float32),
+        vector_version=7,
     )
 
 
@@ -131,6 +132,7 @@ def test_snapshot_round_trips(conn: sqlite3.Connection) -> None:
     assert snap.event_count == 5
     assert snap.total_weight == pytest.approx(3.0)
     assert np.allclose(snap.vector, [0.1, 0.2, 0.3])
+    assert snap.vector_version == 7  # the masking-scheme id travels with the cached vector
 
 
 def test_append_invalidates_the_snapshot(conn: sqlite3.Connection) -> None:
