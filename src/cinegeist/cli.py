@@ -157,6 +157,27 @@ class _RichConsoleIO:
         self._console.print(f"   [dim]{presented.explanation.text}[/dim]")
 
 
+def _resolve_llm(settings, *, offline: bool) -> tuple[bool, tuple[str, ...]]:
+    """Decide online vs offline and the model failover list, warning when a key is missing.
+
+    Shared by ``chat`` and ``serve``: online needs a key and at least one available model, and any
+    shortfall degrades to offline with a one-line explanation rather than an error.
+    """
+    if offline:
+        return False, ()
+    if not settings.has_api_key:
+        err_console.print(
+            f"[yellow]{API_KEY_ENV} is not set — running offline.[/yellow] "
+            "Set a key for phrased questions and explanations, or pass --offline to silence this."
+        )
+        return False, ()
+    models = (settings.model,) if settings.model else tuple(free_models(settings))
+    if not models:
+        err_console.print("[yellow]No models available — running offline.[/yellow]")
+        return False, ()
+    return True, models
+
+
 @app.command()
 def chat(
     offline: bool = typer.Option(
@@ -178,20 +199,7 @@ def chat(
 
     settings = load_settings(overrides={"model": model})
     conn, matrix = _open_catalog_and_genome(data)
-
-    online = not offline
-    models: tuple[str, ...] = ()
-    if online and not settings.has_api_key:
-        err_console.print(
-            f"[yellow]{API_KEY_ENV} is not set — running offline.[/yellow] "
-            "Set a key for phrased questions and explanations, or pass --offline to silence this."
-        )
-        online = False
-    if online:
-        models = (settings.model,) if settings.model else tuple(free_models(settings))
-        if not models:
-            err_console.print("[yellow]No models available — running offline.[/yellow]")
-            online = False
+    online, models = _resolve_llm(settings, offline=offline)
 
     io = _RichConsoleIO(console)
     try:
@@ -204,6 +212,123 @@ def chat(
         console.print("\n[dim]Okay — come back any time.[/dim]")
     finally:
         conn.close()
+
+
+@app.command()
+def serve(
+    host: str = typer.Option(
+        "127.0.0.1",
+        "--host",
+        help="Address to bind. Localhost by default — this serves your "
+        "real catalog, profile, and key, so don't expose it on a network.",
+    ),
+    port: int = typer.Option(8765, "--port", help="Port to listen on."),
+    offline: bool = typer.Option(
+        False, "--offline", help="No LLM calls: fixed phrasing, click-driven, works without a key."
+    ),
+    model: str | None = typer.Option(
+        None, "--model", "-m", help="Model id to use (overrides config and auto-select)."
+    ),
+    data: str | None = typer.Option(
+        None, "--data-dir", help="Catalog location (defaults to ./data)."
+    ),
+    web_dir: str | None = typer.Option(
+        None, "--web-dir", help="Serve a built frontend from this directory (defaults to web/dist)."
+    ),
+    open_browser: bool = typer.Option(
+        False, "--open", help="Open the site in your browser once it's serving."
+    ),
+) -> None:
+    """Run the full conversation behind a local web UI — the browser demo's full mode.
+
+    Serves the real recommender over HTTP for a frontend on the same machine: free-text answers,
+    LLM-phrased questions, full-catalog retrieval, real explanations. Your catalog, profile, and
+    OPENROUTER_API_KEY stay on this machine — none of them enter the browser. Binds to localhost
+    by default. Ctrl-C to stop.
+    """
+    import webbrowser
+
+    from .catalog import genome as genome_mod
+    from .catalog.db import open_catalog
+    from .convo.engine import Engine
+    from .serve import SessionManager, run_server
+
+    settings = load_settings(overrides={"model": model})
+    base = Path(data) if data else data_dir()
+    genome_path = genome_mod.default_genome_path(base)
+    if not genome_path.exists():
+        err_console.print(
+            "[red]No catalog found.[/red] Build one first with [bold]make catalog[/bold] "
+            "(or `cinegeist catalog build`)."
+        )
+        raise typer.Exit(1)
+    matrix = genome_mod.load_genome(genome_path)
+    db_path = base / "cinegeist.db"
+
+    online, models = _resolve_llm(settings, offline=offline)
+
+    def connect():
+        return open_catalog(db_path)
+
+    def make_runner(_io):
+        # The connection is opened inside the runner because it executes on the session's own
+        # thread, and SQLite connections belong to the thread that made them.
+        def runner(convo_io):
+            conn = connect()
+            try:
+                if online:
+                    with OpenRouterClient(settings) as client:
+                        Engine(conn, matrix, convo_io, settings, client=client, models=models).run()
+                else:
+                    Engine(conn, matrix, convo_io, settings, offline=True).run()
+            finally:
+                conn.close()
+
+        return runner
+
+    manager = SessionManager(make_runner)
+
+    probe = connect()
+    try:
+        film_count = int(probe.execute("SELECT COUNT(*) FROM movies").fetchone()[0])
+    finally:
+        probe.close()
+
+    def health() -> dict:
+        return {
+            "ok": True,
+            "name": "cinegeist",
+            "version": __version__,
+            "offline": not online,
+            "films": film_count,
+            "sessions": manager.count(),
+        }
+
+    root = Path(web_dir) if web_dir else Path("web/dist")
+    serve_web = root if root.is_dir() else None
+    if web_dir and serve_web is None:
+        err_console.print(
+            f"[yellow]--web-dir {web_dir} is not a directory — serving the API only.[/yellow]"
+        )
+
+    def on_ready(url: str) -> None:
+        mode = "offline" if not online else "online"
+        console.print(
+            f"[bold]cinegeist[/bold] serving at [cyan]{url}[/cyan] "
+            f"[dim]({mode}, {film_count} films)[/dim]"
+        )
+        if serve_web is None:
+            console.print(
+                "[dim]API only — build the frontend (cd web && npm run build) and pass "
+                "--web-dir web/dist to serve the UI.[/dim]"
+            )
+        else:
+            console.print(f"[dim]Serving the frontend from {serve_web}[/dim]")
+        console.print("[dim]Press Ctrl-C to stop.[/dim]")
+        if open_browser:
+            webbrowser.open(url)
+
+    run_server(manager, health=health, web_dir=serve_web, host=host, port=port, on_ready=on_ready)
 
 
 @app.command("eval")
