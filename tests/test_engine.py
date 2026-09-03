@@ -135,6 +135,54 @@ def test_every_probe_offers_the_escape_hatch(catalog) -> None:
         assert "__stop__" in keys
 
 
+class _StubReply:
+    def __init__(self, text: str) -> None:
+        self.text = text
+
+
+class _StubClient:
+    """Returns a scripted phrasing reply, so we can exercise the online phrasing path."""
+
+    def __init__(self, text: str) -> None:
+        self._text = text
+
+    def chat_with_failover(self, _messages, _models, **_kwargs) -> _StubReply:
+        return _StubReply(self._text)
+
+
+def _probe():
+    from types import SimpleNamespace
+
+    return SimpleNamespace(
+        axis_name="tense",
+        axis_position=2,
+        film_high=SimpleNamespace(title="Blue Ruin", movie_id=1),
+        film_low=SimpleNamespace(title="The Tree of Life", movie_id=2),
+        question="Which would you rather put on tonight — Blue Ruin or The Tree of Life?",
+    )
+
+
+def _online_engine(conn, io, reply_text: str) -> Engine:
+    return Engine(
+        conn, _MATRIX, io, _settings(), client=_StubClient(reply_text), models=("m",), now=_NOW
+    )
+
+
+def test_a_good_phrasing_is_used(catalog) -> None:
+    good = "Raw tension or a slow meditation — Blue Ruin or Tree of Life?"
+    engine = _online_engine(catalog, ScriptedIO(), good)
+    assert engine._phrase_probe(_probe()) == good
+
+
+def test_a_truncated_phrasing_falls_back_to_the_fixed_wording(catalog) -> None:
+    # A reasoning model can burn the token budget thinking and return a stub or nothing; the engine
+    # must show the fixed question, never the fragment.
+    probe = _probe()
+    for stub in ("Which", "Which are you putting on", "", "   "):
+        engine = _online_engine(catalog, ScriptedIO(), stub)
+        assert engine._phrase_probe(probe) == probe.question
+
+
 def test_escape_hatch_jumps_straight_to_picks(catalog) -> None:
     # Hit the escape option on the very first probe.
     def responder(prompt, keys, state):

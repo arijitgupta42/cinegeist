@@ -6,15 +6,16 @@ import type { ChatEntry } from "./chat.ts";
 // questions, and its picks with explanations are all exactly what the tool emitted (plan.md §8.1,
 // §10). The model that phrased and explained is named in TRANSCRIPT_MODEL and credited in the UI.
 //
-// It is lightly condensed for the page — the disambiguation of a couple of the seed films and the
-// runtime/subtitle questions are dropped — but every line shown is verbatim, nothing is reworded.
+// It is lightly condensed for the page — a second seed-title disambiguation and the runtime/subtitle
+// questions are dropped — but every model line shown is verbatim, nothing is reworded.
 //
-// The persona has a distinctive taste they can't articulate: slow, atmospheric dread that resolves
-// (folk horror, occult, bleak tension), and a hard bounce off beautiful-but-plotless art films. They
-// answer the seed questions in vivid shrugs and name films without being able to say why; the tool
-// reads the pattern and returns three confident picks. It produced no wildcard — a wildcard needs a
-// film far from the taste yet sharing its strong tags, and this focused taste has none in range. That
-// honest absence is the real output, left as it came.
+// The persona has a taste they can't articulate: gritty, violent frontier stories — modern crime and
+// old westerns alike, No Country and Sicario sitting next to Bone Tomahawk — and a hard bounce off
+// slow, pretty, "important" art films. They answer in shrugs and name films without being able to say
+// why; the tool reads the through-line (brutal, tense, unsentimental) and returns three picks that
+// each lean on a different film they named. It produced no wildcard — a wildcard needs a film far
+// from the taste yet still sharing its strong tags, and this focused-but-real taste has none in
+// range. That honest absence is the real output, left as it came.
 export const TRANSCRIPT_MODEL = "openai/gpt-5.6-luna";
 
 export const TRANSCRIPT: readonly ChatEntry[] = [
@@ -25,43 +26,43 @@ export const TRANSCRIPT: readonly ChatEntry[] = [
   { from: "them", text: "Name two or three films you've genuinely loved — any era, any genre." },
   {
     from: "you",
-    text: "God, I'm so bad at this. Um... The Witch — that one just crawled under my skin and stayed there. And Hereditary, I genuinely had to sleep with a light on after. And Sicario, weirdly, I've watched it like four times? I couldn't tell you what ties them together, they just get to me somewhere I can't explain.",
+    text: "Ugh, I'm genuinely bad at this. Okay — No Country for Old Men. Sicario, I've rewatched it way too many times. Hell or High Water. And this brutal western, Bone Tomahawk. I honestly couldn't tell you what ties them together — they just get me.",
   },
-  { from: "them", text: "Which “The Witch” did you mean?" },
-  { from: "you", text: "The Witch (2015)" },
+  { from: "them", text: "Which “Sicario” did you mean?" },
+  { from: "you", text: "Sicario (2015)" },
   { from: "them", text: "Anything you started and turned off, or that everyone loves and you just didn't?" },
   {
     from: "you",
-    text: "Yeah — I turned off Under the Skin about halfway, I could not tell you what was happening or why. And The Tree of Life, everyone acts like it's a masterpiece and I was just bored out of my mind — it's gorgeous but it felt like a screensaver, nothing grabbed me.",
+    text: "The Tree of Life — everyone calls it a masterpiece and I was bored stupid, gorgeous but nothing happens. And The Assassination of Jesse James, that long pretty Brad Pitt western — turned it off, way too slow.",
   },
-  { from: "them", text: "Which would you rather put on tonight: The Devil's Candy or Unsane?" },
-  { from: "you", text: "The Devil's Candy" },
+  { from: "them", text: "Which would you rather put on tonight: Goodfellas or Unforgiven?" },
+  { from: "you", text: "Unforgiven" },
   {
     from: "them",
-    text: "In the mood for eerie chills or darkly quirky western tales tonight — Ringu (Ring) or The Ballad of Buster Scruggs?",
+    text: "Which are you in the mood for tonight — The Major or Wild Wild Country?",
   },
-  { from: "you", text: "Ringu (Ring)" },
+  { from: "you", text: "The Major" },
   {
     from: "them",
     header: "Your picks",
     picks: [
       {
-        title: "The Silence of the Lambs",
-        year: 1991,
+        title: "Blue Ruin",
+        year: 2013,
         reason:
-          "The Witch — “that one just crawled under my skin and stayed there” — points to the horror and suspenseful tension this shares with your taste.",
+          "Blue Ruin fits the brutal, violent strain behind your praise for Bone Tomahawk, with tension that connects to the kind of harshness you respond to there.",
       },
       {
-        title: "Don't Breathe",
-        year: 2016,
+        title: "One False Move",
+        year: 1992,
         reason:
-          "Since you’ve watched Sicario “like four times,” this tense, suspense-driven pick seems suited to the kind of repeatable pressure you return to.",
+          "Given how often you return to Sicario, One False Move’s tense and violent register makes sense as another place to look for that same pressure.",
       },
       {
-        title: "Green Room",
-        year: 2015,
+        title: "The Chaser (Chugyeogja)",
+        year: 2008,
         reason:
-          "This sits most directly on the horror side of the match, while keeping the suspense tense rather than treating it as a purely atmospheric pick.",
+          "The Chaser lines up with the violent, brutal edge you found in No Country for Old Men, while keeping the recommendation focused on tension rather than atmosphere.",
       },
     ],
   },
