@@ -84,6 +84,17 @@ class ConversationIO(Protocol):
 _ESCAPE = Choice("__stop__", "just show me something")
 
 
+def _looks_like_question(text: str) -> bool:
+    """Whether a phrased probe is usable, or the model returned a truncated stub.
+
+    A real pair question names two films and asks something, so it carries a question mark and more
+    than a couple of words. A reasoning model given a tight token budget can spend it thinking and
+    return an empty reply or a bare "Which" — reject those so the caller falls back to the fixed
+    wording rather than show the user a fragment.
+    """
+    return "?" in text and len(text) >= 15
+
+
 class Engine:
     """Drives one conversation to a set of recommendations, recording evidence as it goes."""
 
@@ -334,12 +345,14 @@ class Engine:
                 [{"role": "system", "content": prompt}, {"role": "user", "content": user}],
                 self.models,
                 temperature=0.7,
-                max_tokens=60,
+                # Room for a reasoning model to think and still emit the whole question: too tight a
+                # cap makes it spend the budget reasoning and return a truncated stub.
+                max_tokens=200,
             )
         except LLMError:
             return probe.question
         phrased = " ".join(reply.text.split()).strip().strip('"')
-        return phrased or probe.question
+        return phrased if _looks_like_question(phrased) else probe.question
 
     def _ranking(self, profile_vector: np.ndarray) -> tuple[list[int], list[float]]:
         """A quick deterministic top ranking of the pool for the stopping rules (no MMR, no LLM)."""
