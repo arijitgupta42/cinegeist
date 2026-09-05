@@ -97,7 +97,6 @@ locally. `--data-dir PATH` points any command at a catalog outside the default `
 |---|---|
 | `cinegeist profile show` | Print your strongest affinities and aversions, with your own words as evidence. |
 | `cinegeist profile show -n 12` | Show more axes per side (default 8). |
-| `cinegeist profile timeline` | Show how your taste has evolved across sessions: evidence mass, the top axes rising and falling, drift, and how older evidence has faded. |
 | `cinegeist profile forget <event-id>` | Delete one piece of evidence; ids come from `profile show`. |
 | `cinegeist profile reset` | Erase the profile and start over. Asks first; `--yes` skips the prompt. |
 

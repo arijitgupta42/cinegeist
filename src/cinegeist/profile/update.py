@@ -215,37 +215,6 @@ def _rank_axes(
     return tuple(chosen)
 
 
-def profile_from_events(
-    conn: sqlite3.Connection,
-    matrix: np.ndarray,
-    events: list[PreferenceEvent],
-    *,
-    user_id: str = store.DEFAULT_USER,
-    now: datetime,
-    half_life: float = HALF_LIFE_DAYS,
-) -> TasteProfile:
-    """Derive a profile from a specific set of events, without touching the cached snapshot.
-
-    The same decayed-centroid maths as :func:`compute_profile`, but over the events handed in
-    rather than the whole log, and read-only. This is what lets a caller reconstruct the profile
-    *as it stood at a past moment* — pass the events up to that time and ``now=that time`` — for the
-    taste-over-time view (:mod:`cinegeist.profile.history`), where writing a snapshot for a
-    historical instant would corrupt the live cache.
-    """
-    centroid, total_weight, contributions = _accumulate(conn, matrix, events, now, half_life)
-    axes = _rank_axes(conn, centroid, contributions)
-    session_count = len({e.session_id for e in events if e.session_id is not None})
-    return TasteProfile(
-        user_id=user_id,
-        genome_vector=centroid,
-        total_weight=total_weight,
-        event_count=len(events),
-        session_count=session_count,
-        computed_at=now,
-        axes=axes,
-    )
-
-
 def compute_profile(
     conn: sqlite3.Connection,
     matrix: np.ndarray,
@@ -262,19 +231,29 @@ def compute_profile(
     """
     now = now or store.now_utc()
     events = store.iter_events(conn, user_id)
-    profile = profile_from_events(
-        conn, matrix, events, user_id=user_id, now=now, half_life=half_life
-    )
+    event_count = len(events)
+    session_count = store.count_sessions(conn, user_id)
+
+    centroid, total_weight, contributions = _accumulate(conn, matrix, events, now, half_life)
     store.write_snapshot(
         conn,
         user_id,
         computed_at=now,
-        event_count=profile.event_count,
-        total_weight=profile.total_weight,
-        vector=profile.genome_vector,
+        event_count=event_count,
+        total_weight=total_weight,
+        vector=centroid,
         vector_version=MASK_VERSION,
     )
-    return profile
+    axes = _rank_axes(conn, centroid, contributions)
+    return TasteProfile(
+        user_id=user_id,
+        genome_vector=centroid,
+        total_weight=total_weight,
+        event_count=event_count,
+        session_count=session_count,
+        computed_at=now,
+        axes=axes,
+    )
 
 
 def load_vector(
