@@ -347,10 +347,11 @@ def evaluate(
     real catalog and no API key needed — it is self-contained and deterministic, so the number
     moves only when the recommender does. Tune a weight in the scorer and watch it here.
     """
-    from .eval import run_eval
+    from .eval import run_eval, run_returning_eval
 
     report = run_eval(seed=seed)
     _render_eval(report, verbose=verbose)
+    _render_returning(run_returning_eval(seed=seed))
 
 
 def _render_eval(report, *, verbose: bool) -> None:
@@ -398,6 +399,44 @@ def _render_eval(report, *, verbose: bool) -> None:
                     f"→ chose {turn.chosen_label}"
                 )
             console.print(f"  [dim]picks:[/dim] {', '.join(res.pick_titles) or '—'}")
+
+
+def _render_returning(result) -> None:
+    """Print the returning viewer's trajectory: the profile sharpening while old evidence fades."""
+    table = Table(
+        title=(
+            f"Returning viewer — {result.persona.name}, "
+            f"{result.n_visits} visits {result.gap_days} days apart"
+        )
+    )
+    for name, justify in (
+        ("Visit", "left"),
+        ("Sessions", "right"),
+        ("Events", "right"),
+        ("Evidence mass", "right"),
+        ("Taste cosine", "right"),
+        ("Misfire share", "right"),
+    ):
+        table.add_column(name, justify=justify)
+    for visit in result.visits:
+        table.add_row(
+            visit.label,
+            str(visit.session_count),
+            str(visit.event_count),
+            f"{visit.total_weight:.2f}",
+            f"{visit.taste_cosine:.3f}",
+            f"{visit.misfire_share:.3f}",
+        )
+    console.print()
+    console.print(table)
+    sharpen = "[green]yes[/green]" if result.sharpened else "[red]no[/red]"
+    faded = "[green]yes[/green]" if result.old_evidence_faded else "[red]no[/red]"
+    greeted = "[green]yes[/green]" if result.welcomed_back else "[red]no[/red]"
+    console.print(
+        f"[dim]sharpened toward true taste:[/dim] {sharpen}   "
+        f"[dim]visit-1 misfire faded:[/dim] {faded}   "
+        f"[dim]greeted as returning:[/dim] {greeted}"
+    )
 
 
 catalog_app = typer.Typer(
