@@ -688,6 +688,114 @@ def profile_show(
     _render_axes("Pushed away from", profile.aversions[:limit])
 
 
+_SPARK = "▁▂▃▄▅▆▇█"
+
+
+def _sparkline(values: list[float], lo: float, hi: float) -> str:
+    """A tiny bar-chart string of ``values`` scaled into the [lo, hi] range."""
+    if not values:
+        return ""
+    if hi <= lo:
+        return _SPARK[0] * len(values)
+    return "".join(_SPARK[min(7, int((v - lo) / (hi - lo) * 7.999))] for v in values)
+
+
+@profile_app.command("timeline")
+def profile_timeline(
+    data: str | None = typer.Option(
+        None, "--data-dir", help="Catalog location (defaults to ./data)."
+    ),
+) -> None:
+    """Show how your taste has evolved over time — evidence mass, axes, and drift across sessions.
+
+    Reconstructs the profile at each past session from the event log and the decay function, so you
+    can watch the centroid move: the evidence mass rising, the strongest axes climbing and slipping,
+    and older evidence fading as it ages past the half-life. This is the honest answer to why
+    tonight's picks differ from last month's — the picks follow the centroid, and here it moves.
+    """
+    from .profile import history
+
+    conn, matrix = _open_catalog_and_genome(data)
+    try:
+        timeline = history.build_timeline(conn, matrix)
+    finally:
+        conn.close()
+
+    if timeline.is_empty:
+        console.print(
+            "[yellow]No taste history yet.[/yellow] React to a few films with "
+            "[bold]cinegeist chat[/bold] and this fills in."
+        )
+        return
+    _render_timeline(timeline)
+
+
+def _render_timeline(timeline) -> None:
+    """Print the trajectory: per-session mass and drift, axis sparklines, and fading evidence."""
+    if len(timeline.points) < 2:
+        console.print(
+            "[dim]Only one session so far — the trajectory appears once you've come back at "
+            "least once. Here's where the profile stands today.[/dim]\n"
+        )
+
+    max_mass = max((p.total_weight for p in timeline.points), default=1.0) or 1.0
+    table = Table(title="Taste over time", title_justify="left")
+    table.add_column("When", justify="left")
+    table.add_column("Events", justify="right")
+    table.add_column("Evidence mass", justify="left")
+    table.add_column("Drift", justify="right")
+    for point in timeline.points:
+        bar = "█" * max(1, round(point.total_weight / max_mass * 16))
+        drift = "—" if point.drift is None else f"{point.drift * 100:.0f}%"
+        table.add_row(
+            point.when.strftime("%Y-%m-%d"),
+            str(point.event_count),
+            f"[cyan]{bar}[/cyan] {point.total_weight:.1f}",
+            drift,
+        )
+    console.print(table)
+    console.print(
+        "[dim]Drift is how far the taste centroid moved since the previous session "
+        "(0% = same direction).[/dim]"
+    )
+
+    if timeline.axis_tracks and len(timeline.points) >= 2:
+        # One shared scale across every track, so the bars are comparable line to line.
+        allw = [w for track in timeline.axis_tracks for w in track.weights]
+        lo, hi = min(allw), max(allw)
+        axtable = Table(title="\nStrongest axes, oldest → newest", title_justify="left", box=None)
+        axtable.add_column("Axis", justify="left")
+        axtable.add_column("Trajectory", justify="left")
+        axtable.add_column("Now", justify="right")
+        for track in timeline.axis_tracks:
+            spark = _sparkline(list(track.weights), lo, hi)
+            current = track.weights[-1]
+            colour = "green" if current >= 0 else "red"
+            axtable.add_row(track.name, f"[{colour}]{spark}[/{colour}]", f"{current:+.2f}")
+        console.print(axtable)
+
+    if timeline.fading:
+        console.print("\n[bold]How your evidence has aged[/bold]")
+        fade = Table(box=None, pad_edge=False, show_header=True)
+        fade.add_column("Evidence", justify="left")
+        fade.add_column("Age", justify="right")
+        fade.add_column("Still counts", justify="left")
+        for item in timeline.fading:
+            bar = "█" * max(1, round(item.decay * 12))
+            age = f"{item.age_days / 30:.1f}mo" if item.age_days >= 30 else f"{item.age_days:.0f}d"
+            colour = "green" if item.decay >= 0.75 else "yellow" if item.decay >= 0.4 else "red"
+            fade.add_row(
+                _truncate(item.event.evidence or "(no note)", 52),
+                age,
+                f"[{colour}]{bar}[/{colour}] {item.decay * 100:.0f}%",
+            )
+        console.print(fade)
+        console.print(
+            "[dim]Evidence loses half its weight every 270 days — it fades rather than being "
+            "deleted, so old taste can still resurface.[/dim]"
+        )
+
+
 @profile_app.command("forget")
 def profile_forget(
     event_id: int = typer.Argument(..., help="The id of the event to delete (see `profile show`)."),
