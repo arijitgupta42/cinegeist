@@ -47,17 +47,34 @@ export function renderMap2D(container: HTMLElement, model: MapModel): void {
   ];
   const projRaw = (raw: number[]): [number, number] => toCanvas(raw[ax], raw[ay]);
 
-  // Film cloud: each point coloured by its cluster, faded where coverage is thin.
+  // Film cloud: each point coloured by its cluster, faded where coverage is thin. Kept dim — it is
+  // the backdrop, not the subject, so the marker, trail and region labels read on top of it.
   for (let i = 0; i < model.nFilms; i++) {
     const [cx, cy] = toCanvas(model.xyz[i * 3 + ax], model.xyz[i * 3 + ay]);
     const r = Math.round(model.colors[i * 3] * 255);
     const g = Math.round(model.colors[i * 3 + 1] * 255);
     const b = Math.round(model.colors[i * 3 + 2] * 255);
-    ctx.fillStyle = `rgba(${r},${g},${b},${(0.15 + 0.6 * model.coverage[i]).toFixed(3)})`;
+    ctx.fillStyle = `rgba(${r},${g},${b},${(0.1 + 0.45 * model.coverage[i]).toFixed(3)})`;
     ctx.beginPath();
-    ctx.arc(cx, cy, 2.1, 0, Math.PI * 2);
+    ctx.arc(cx, cy, 1.8, 0, Math.PI * 2);
     ctx.fill();
   }
+
+  // Named taste regions, floated at each cluster centroid — the same labels the 3D map shows, so a
+  // reader can place the marker without the legend.
+  ctx.font = "600 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+  ctx.textBaseline = "middle";
+  for (const region of model.regions) {
+    const [x, y] = projRaw(region.coord);
+    const label = region.label.toUpperCase();
+    const w = ctx.measureText(label).width;
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.fillRect(x - w / 2 - 5, y - 9, w + 10, 18);
+    ctx.fillStyle = `rgb(${Math.round(region.color[0] * 255)},${Math.round(region.color[1] * 255)},${Math.round(region.color[2] * 255)})`;
+    ctx.textAlign = "center";
+    ctx.fillText(label, x, y + 1);
+  }
+  ctx.textAlign = "start";
 
   // Trail: a faint polyline through the barycentre's path, brightening toward the present.
   if (model.trail.length > 1) {

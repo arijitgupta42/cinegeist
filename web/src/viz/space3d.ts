@@ -1,8 +1,11 @@
-// View A — the 3D taste-space map (plan.md §9.1, §9.2, the hero). The 2,000 shard films sit at their
-// precomputed UMAP coordinates as one glowing point cloud, coloured by taste-space cluster and faded
-// where the shard's coverage runs thin (§8.4). A bright marker walks to the barycentre of the films
-// the visitor reacted to, trailing the path it took; the recommendations pulse, the wildcard pulses
-// in magenta further out. "Don't visualise the catalog — visualise the user moving through it."
+// View A — the 3D taste-space map (plan.md §9.1, §9.2, §16, the hero). The shard films sit at their
+// precomputed UMAP coordinates, but the cloud is deliberately a faint, subsampled backdrop: 2,000
+// bright additive points read as fog and buried the one thing that matters (§16). So the film cloud
+// recedes — thinned to a stride sample, dim, normal-blended — and the eye lands on what moved: a
+// bright marker that walks to the barycentre of the films the visitor reacted to, its trail, the
+// pulsing picks (cyan) and wildcard (magenta), and floating labels naming each taste region so a
+// stranger reads their own position in a couple of seconds. "Don't visualise the catalog — visualise
+// the user moving through it."
 //
 // three.js is imported dynamically inside mount(), so it's a separate chunk that only downloads when
 // the Learn tab first opens the map (plan.md §8.7). The pure maths (barycentre, clustering, the fit
@@ -18,6 +21,12 @@ export interface MapFilm {
   tags: string[];
 }
 
+export interface MapRegion {
+  label: string; // the cluster's characteristic tag, e.g. "noir"
+  coord: number[]; // raw coordinate of the cluster centroid
+  color: number[]; // rgb in [0, 1], the cluster colour
+}
+
 export interface MapModel {
   xyz: Float32Array; // nFilms × 3, raw UMAP coordinates
   nFilms: number;
@@ -27,9 +36,16 @@ export interface MapModel {
   trail: number[][]; // raw coordinates, oldest → newest
   pickIndices: number[]; // confident picks, as shard indices
   wildcardIndex: number | null;
+  regions: MapRegion[]; // named taste regions, drawn as floating labels
   filmAt: (i: number) => MapFilm;
   reducedMotion: boolean;
 }
+
+// The film cloud is drawn as a faint backdrop, not the subject. We render at most this many films —
+// a deterministic stride keeps the spatial spread while cutting the overdraw that turned 2,000
+// additively-blended points into undifferentiated fog (plan.md §16). The marker, trail, picks and
+// region labels are what the eye should land on, so they stay bright while the cloud recedes.
+const CLOUD_BUDGET = 480;
 
 /** Whether this browser can give us a WebGL context at all. */
 export function hasWebGL(): boolean {
@@ -56,7 +72,10 @@ const POINT_VERT = `
   }`;
 
 // A soft round point; thinly-covered films fade toward the background rather than being padded away
-// (plan.md §8.4 — you watch the sparse regions instead of being told about them afterward).
+// (plan.md §8.4 — you watch the sparse regions instead of being told about them afterward). The cloud
+// is deliberately dim: it is the backdrop the marker moves through, not the subject, so its alpha
+// tops out well below the markers' and it uses normal (not additive) blending so overlaps don't
+// bloom into fog.
 const POINT_FRAG = `
   varying vec3 vColor;
   varying float vCoverage;
@@ -65,7 +84,7 @@ const POINT_FRAG = `
     float d = length(uv);
     if (d > 0.5) discard;
     float glow = smoothstep(0.5, 0.0, d);
-    float alpha = glow * mix(0.12, 0.85, vCoverage);
+    float alpha = glow * mix(0.05, 0.38, vCoverage);
     gl_FragColor = vec4(vColor, alpha);
   }`;
 
@@ -108,6 +127,8 @@ export class TasteMap {
   private camera!: THREE.PerspectiveCamera;
   private group!: THREE.Group; // holds the cloud + markers, rotated by drag / auto-rotate
   private cloud!: THREE.Points;
+  private cloudIndex!: Int32Array; // rendered-point → film index (the cloud is subsampled)
+  private labelSprites: THREE.Sprite[] = []; // floating region labels
   private marker?: THREE.Points;
   private picks?: THREE.Points;
   private wildcard?: THREE.Points;
@@ -121,7 +142,7 @@ export class TasteMap {
   private disposed = false;
   private rotX = 0.35;
   private rotY = 0.2;
-  private dist = 3.2;
+  private dist = 2.1;
   private autoRotate: boolean;
   private dragging = false;
   private lastX = 0;
@@ -161,6 +182,7 @@ export class TasteMap {
     this.buildCloud();
     this.buildTrail();
     this.buildMarkers();
+    this.buildRegions();
 
     this.raycaster = new T.Raycaster();
     this.raycaster.params.Points = { threshold: 0.035 };
@@ -177,27 +199,88 @@ export class TasteMap {
   private buildCloud(): void {
     const T = this.three;
     const n = this.model.nFilms;
-    const positions = new Float32Array(n * 3);
-    for (let i = 0; i < n; i++) {
+    // Subsample with a fixed stride: keeps the spatial spread (so the shape of taste-space survives)
+    // while cutting the point count that made the cloud read as fog. Picks always render in full via
+    // their own markers, so nothing important is dropped here.
+    const stride = Math.max(1, Math.ceil(n / CLOUD_BUDGET));
+    const kept = Math.ceil(n / stride);
+    const positions = new Float32Array(kept * 3);
+    const colors = new Float32Array(kept * 3);
+    const coverage = new Float32Array(kept);
+    const cloudIndex = new Int32Array(kept);
+    let j = 0;
+    for (let i = 0; i < n; i += stride) {
       const p = applyTransform([this.model.xyz[i * 3], this.model.xyz[i * 3 + 1], this.model.xyz[i * 3 + 2]], this.t);
-      positions[i * 3] = p[0];
-      positions[i * 3 + 1] = p[1];
-      positions[i * 3 + 2] = p[2];
+      positions[j * 3] = p[0];
+      positions[j * 3 + 1] = p[1];
+      positions[j * 3 + 2] = p[2];
+      colors[j * 3] = this.model.colors[i * 3];
+      colors[j * 3 + 1] = this.model.colors[i * 3 + 1];
+      colors[j * 3 + 2] = this.model.colors[i * 3 + 2];
+      coverage[j] = this.model.coverage[i];
+      cloudIndex[j] = i;
+      j++;
     }
+    this.cloudIndex = cloudIndex;
     const geo = new T.BufferGeometry();
     geo.setAttribute("position", new T.BufferAttribute(positions, 3));
-    geo.setAttribute("color", new T.BufferAttribute(this.model.colors, 3));
-    geo.setAttribute("coverage", new T.BufferAttribute(this.model.coverage, 1));
+    geo.setAttribute("color", new T.BufferAttribute(colors, 3));
+    geo.setAttribute("coverage", new T.BufferAttribute(coverage, 1));
     const mat = new T.ShaderMaterial({
-      uniforms: { uSize: { value: 26 * this.renderer.getPixelRatio() } },
+      uniforms: { uSize: { value: 15 * this.renderer.getPixelRatio() } },
       vertexShader: POINT_VERT,
       fragmentShader: POINT_FRAG,
       transparent: true,
       depthWrite: false,
-      blending: T.AdditiveBlending,
+      blending: T.NormalBlending,
     });
     this.cloud = new T.Points(geo, mat);
     this.group.add(this.cloud);
+  }
+
+  // Floating labels at each taste region's centroid — the single biggest legibility win. They turn an
+  // abstract cloud into a named map ("you're near the noir region"), so a stranger reads their own
+  // position in a couple of seconds. Each is a camera-facing sprite drawn from a small canvas texture.
+  private buildRegions(): void {
+    for (const region of this.model.regions) {
+      const sprite = this.labelSprite(region.label, region.color);
+      const p = applyTransform(region.coord, this.t);
+      sprite.position.set(p[0], p[1], p[2]);
+      this.labelSprites.push(sprite);
+      this.group.add(sprite);
+    }
+  }
+
+  private labelSprite(text: string, color: number[]): THREE.Sprite {
+    const T = this.three;
+    const dpr = Math.min(devicePixelRatio || 1, 2);
+    const pad = 8 * dpr;
+    const font = `${13 * dpr}px ui-monospace, "SF Mono", Menlo, Consolas, monospace`;
+    const measure = document.createElement("canvas").getContext("2d")!;
+    measure.font = font;
+    const label = text.toUpperCase();
+    const textW = measure.measureText(label).width;
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.ceil(textW + pad * 2);
+    canvas.height = Math.ceil(20 * dpr + pad);
+    const ctx = canvas.getContext("2d")!;
+    ctx.font = font;
+    ctx.textBaseline = "middle";
+    const [r, g, b] = color.map((c) => Math.round(c * 255));
+    // A dark plate keeps the label readable over the cloud without hiding it.
+    ctx.fillStyle = "rgba(0, 0, 0, 0.45)";
+    roundRect(ctx, 1, 1, canvas.width - 2, canvas.height - 2, 5 * dpr);
+    ctx.fill();
+    ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+    ctx.fillText(label, pad, canvas.height / 2 + dpr);
+    const tex = new T.CanvasTexture(canvas);
+    tex.minFilter = T.LinearFilter;
+    const mat = new T.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false, opacity: 0.9 });
+    const sprite = new T.Sprite(mat);
+    const aspect = canvas.width / canvas.height;
+    const h = 0.16;
+    sprite.scale.set(h * aspect, h, 1);
+    return sprite;
   }
 
   private buildTrail(): void {
@@ -211,7 +294,7 @@ export class TasteMap {
       positions[i * 3] = p[0];
       positions[i * 3 + 1] = p[1];
       positions[i * 3 + 2] = p[2];
-      alpha[i] = 0.05 + 0.55 * (i / (trail.length - 1)); // older = fainter
+      alpha[i] = 0.18 + 0.72 * (i / (trail.length - 1)); // older = fainter; brighter than the cloud
     });
     const geo = new T.BufferGeometry();
     geo.setAttribute("position", new T.BufferAttribute(positions, 3));
@@ -344,7 +427,7 @@ export class TasteMap {
       this.tip.hidden = true;
       return;
     }
-    const film = this.model.filmAt(hit[0].index);
+    const film = this.model.filmAt(this.cloudIndex[hit[0].index]);
     const rect = this.renderer.domElement.getBoundingClientRect();
     const x = ((this.pointer.x + 1) / 2) * rect.width;
     const y = ((1 - this.pointer.y) / 2) * rect.height;
@@ -416,10 +499,15 @@ export class TasteMap {
     this.cleanups = [];
     if (!this.renderer) return;
     this.scene.traverse((o) => {
-      const any = o as unknown as { geometry?: THREE.BufferGeometry; material?: THREE.Material };
+      const any = o as unknown as {
+        geometry?: THREE.BufferGeometry;
+        material?: THREE.Material & { map?: THREE.Texture };
+      };
       any.geometry?.dispose();
+      any.material?.map?.dispose(); // sprite label textures
       any.material?.dispose();
     });
+    this.labelSprites = [];
     this.renderer.dispose();
     this.renderer.domElement.remove();
     this.tip?.remove();
@@ -428,4 +516,15 @@ export class TasteMap {
 
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+}
+
+function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
+  const rr = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rr);
+  ctx.arcTo(x + w, y + h, x, y + h, rr);
+  ctx.arcTo(x, y + h, x, y, rr);
+  ctx.arcTo(x, y, x + w, y, rr);
+  ctx.closePath();
 }

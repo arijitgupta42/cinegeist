@@ -33,6 +33,7 @@ export interface MapBuild {
 interface Clustering {
   colors: Float32Array; // nFilms × 3
   labels: Int32Array;
+  centroids: number[][]; // per-cluster mean coordinate
   palette: number[][];
 }
 
@@ -42,7 +43,7 @@ function clusterShard(shard: DecodedShard): Clustering {
   const cached = clusterCache.get(shard);
   if (cached) return cached;
 
-  const { labels } = kmeans(shard.xyz, shard.nFilms, 3, N_CLUSTERS, shard.seed || 1);
+  const { labels, centroids } = kmeans(shard.xyz, shard.nFilms, 3, N_CLUSTERS, shard.seed || 1);
   const palette = clusterPalette(N_CLUSTERS);
   const colors = new Float32Array(shard.nFilms * 3);
   for (let i = 0; i < shard.nFilms; i++) {
@@ -51,7 +52,7 @@ function clusterShard(shard: DecodedShard): Clustering {
     colors[i * 3 + 1] = c[1];
     colors[i * 3 + 2] = c[2];
   }
-  const result = { colors, labels, palette };
+  const result = { colors, labels, centroids, palette };
   clusterCache.set(shard, result);
   return result;
 }
@@ -71,7 +72,7 @@ export function buildMap(
   shard: DecodedShard,
   picks: { pickIndices: number[]; wildcardIndex: number | null },
 ): MapBuild {
-  const { colors, labels, palette } = clusterShard(shard);
+  const { colors, labels, centroids, palette } = clusterShard(shard);
 
   const points: WeightedPoint[] = session
     .reactionWeights()
@@ -88,6 +89,7 @@ export function buildMap(
     trail,
     pickIndices: picks.pickIndices,
     wildcardIndex: picks.wildcardIndex,
+    regions: [],
     filmAt: (i) => {
       const f = shard.films[i];
       return {
@@ -116,10 +118,14 @@ export function buildMap(
   for (const c of order) {
     const pick = ranked[c].find((t) => !used.has(t));
     if (pick !== undefined) used.add(pick);
-    legend.push({
-      color: rgb(palette[c]),
-      label: pick !== undefined ? (shard.tagNames.get(pick) ?? `region ${c + 1}`) : `region ${c + 1}`,
-    });
+    const label = pick !== undefined ? (shard.tagNames.get(pick) ?? `region ${c + 1}`) : `region ${c + 1}`;
+    legend.push({ color: rgb(palette[c]), label });
+    // Float the same labels in the map itself, at each cluster's centroid, so regions are named
+    // in-scene and the marker's position reads instantly. Skip a cluster with no real tag or no
+    // centroid (an empty cluster from k-means).
+    if (pick !== undefined && centroids[c]) {
+      model.regions.push({ label, coord: centroids[c], color: palette[c] });
+    }
   }
 
   return { model, legend, summary: summarise(shard, centroid) };
