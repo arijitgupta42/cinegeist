@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from cinegeist.eval import run_eval, run_persona
+from cinegeist.eval import run_eval, run_persona, run_returning_eval
 from cinegeist.eval.catalog import CLUSTERS, build_synthetic_catalog
 from cinegeist.eval.personas import PERSONAS
 
@@ -67,3 +67,43 @@ def test_a_clear_persona_lands_in_its_cluster() -> None:
     result = run_persona(purist, catalog)
     assert result.precision_at_3 == pytest.approx(1.0)
     assert all(cluster == "slow european drama" for cluster in result.pick_clusters)
+
+
+# -- the returning viewer (persistence + decay across sessions, plan.md §16) -----------------
+
+
+def test_returning_profile_sharpens_and_old_evidence_fades() -> None:
+    # The core invariant the multi-session eval exists to guard: a viewer coming back over weeks
+    # ends up with a profile closer to their true taste, while the visit-1 misfire (an off-taste
+    # like) loses its grip as fresher evidence accrues and it decays. Both are strict, not just
+    # non-worsening, so a broken decay (e.g. no ageing) that keeps the misfire dominant fails here.
+    result = run_returning_eval(seed=0)
+    assert result.sharpened
+    assert result.old_evidence_faded
+    first, last = result.visits[0], result.visits[-1]
+    assert last.taste_cosine > first.taste_cosine
+    assert last.misfire_share < first.misfire_share
+
+
+def test_returning_profile_persists_and_grows_across_visits() -> None:
+    # History persists under one user id: each visit is its own session and adds evidence, so the
+    # session and event counts climb monotonically and the profile is never empty.
+    result = run_returning_eval(seed=0)
+    assert len(result.visits) == result.n_visits
+    sessions = [v.session_count for v in result.visits]
+    events = [v.event_count for v in result.visits]
+    assert sessions == sorted(sessions) and sessions[-1] == result.n_visits
+    assert events == sorted(events) and events[0] < events[-1]
+    assert all(v.total_weight > 0 for v in result.visits)
+
+
+def test_returning_viewer_is_greeted_as_returning() -> None:
+    # The shipping engine must recognise the persisted profile on the next visit, not cold-start.
+    assert run_returning_eval(seed=0).welcomed_back
+
+
+def test_returning_eval_is_deterministic() -> None:
+    first = run_returning_eval(seed=0)
+    second = run_returning_eval(seed=0)
+    assert [v.taste_cosine for v in first.visits] == [v.taste_cosine for v in second.visits]
+    assert [v.misfire_share for v in first.visits] == [v.misfire_share for v in second.visits]
